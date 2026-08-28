@@ -72,3 +72,11 @@ func Render(line string, values map[string]string) string {
 		return match
 	})
 }
+
+// HasUnresolvedPlaceholder reports whether s still contains a {VARIABLE}
+// placeholder after Render — i.e. Render had no value for it. This is the
+// building block for validating a template+Excel pairing (via --dry-run)
+// before ever connecting to a device.
+func HasUnresolvedPlaceholder(s string) bool {
+	return varPattern.MatchString(s)
+}

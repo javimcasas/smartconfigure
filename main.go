@@ -25,6 +25,7 @@ func main() {
 	connectTimeout := flag.Duration("connect-timeout", 10*time.Second, "SSH connection timeout")
 	idleTimeout := flag.Duration("idle-timeout", 800*time.Millisecond, "How long to wait for the device to go quiet before sending the next line")
 	lineTimeout := flag.Duration("line-timeout", 15*time.Second, "Max time to wait for a single line's output before giving up on it")
+	dryRun := flag.Bool("dry-run", false, "Validate the template and Excel without connecting to any device")
 	showVersion := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
 
@@ -57,6 +58,9 @@ func main() {
 		fatalf("Could not create output directory: %v", err)
 	}
 
+	if *dryRun {
+		fmt.Println("Running in DRY-RUN mode — no device will be contacted.")
+	}
 	fmt.Printf("Loaded template with %d line(s) and %d variable(s): %v\n", len(tmpl.Lines), len(tmpl.Variables), tmpl.Variables)
 	fmt.Printf("Loaded %d device(s) from %s\n\n", len(devices), *excelPath)
 
@@ -74,7 +78,13 @@ func main() {
 		start := time.Now()
 
 		logPath := filepath.Join(*outDir, sanitizeFilename(dev.IP)+".log")
-		res := sshrunner.Run(dev, tmpl.Lines, cfg, logPath)
+
+		var res report.Result
+		if *dryRun {
+			res = sshrunner.DryRun(dev, tmpl.Lines, logPath)
+		} else {
+			res = sshrunner.Run(dev, tmpl.Lines, cfg, logPath)
+		}
 		res.Duration = time.Since(start)
 
 		if res.Success {

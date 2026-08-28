@@ -41,6 +41,22 @@ fila se detiene ahí (no sigue mandando el resto del template a un equipo en
 mal estado) y se marca como FAILED en el reporte; el resto de equipos del
 lote continúa normalmente.
 
+## Validar sin acceso a los equipos (`--dry-run`)
+
+Si todavía no tienes acceso a la red de gestión, puedes validar que el
+template y el Excel encajan bien sin conectar a nada:
+
+```bash
+smartconfigure --template template.txt --excel equipos.xlsx --dry-run
+```
+
+En modo `--dry-run`, SmartConfigure sustituye las variables de cada fila y
+escribe en el log exactamente lo que se habría mandado a cada equipo, pero
+sin abrir ninguna conexión SSH. Si a alguna fila le falta el valor de una
+variable (columna mal escrita en el Excel, por ejemplo), esa fila se marca
+como FAILED con el motivo exacto — así detectas errores de configuración
+antes de tocar ningún equipo real.
+
 ## Flags disponibles
 
 | Flag | Por defecto | Descripción |
@@ -48,6 +64,7 @@ lote continúa normalmente.
 | `--template` | — | Ruta al archivo de template (obligatorio) |
 | `--excel` | — | Ruta al Excel de equipos (obligatorio) |
 | `--out` | `smartconfigure-output` | Carpeta de salida de logs y reporte |
+| `--dry-run` | `false` | Valida template + Excel sin conectar a ningún equipo |
 | `--port` | `22` | Puerto SSH |
 | `--connect-timeout` | `10s` | Timeout de conexión SSH |
 | `--idle-timeout` | `800ms` | Cuánto esperar en silencio antes de mandar la siguiente línea |
