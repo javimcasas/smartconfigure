@@ -34,11 +34,17 @@ jobs:
       - name: Build Linux binary
         run: fyne-cross linux -arch=amd64 -app-id com.javimcasas.smartconfigure -output smartconfigure
 
+      # Debug step: print exactly what fyne-cross produced and where,
+      # instead of guessing the path — the next step's `cp` failed once
+      # already because the assumed layout was wrong.
+      - name: List fyne-cross output
+        run: find fyne-cross/dist -type f
+
       - name: Collect artifacts
         run: |
           mkdir -p dist
-          cp fyne-cross/dist/windows-amd64/smartconfigure.exe dist/smartconfigure-windows-amd64.exe
-          cp fyne-cross/dist/linux-amd64/smartconfigure.tar.xz dist/smartconfigure-linux-amd64.tar.xz
+          find fyne-cross/dist -type f -exec cp {} dist/ \;
+          ls -la dist/
 
       - uses: actions/upload-artifact@v4
         with:
