@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
@@ -35,8 +36,18 @@ func main() {
 	}
 
 	if *templatePath == "" || *excelPath == "" {
+		// This is the classic "double-clicked the .exe from Explorer" case:
+		// no flags were given, so there's nothing useful to run. Explorer
+		// closes the console window the instant this process exits, so
+		// without a pause the user only sees a flash and nothing else.
+		// (We deliberately do NOT pause anywhere else in the program: if
+		// it was launched from an already-open terminal, that terminal
+		// stays open on its own and a forced pause would just be annoying.)
+		fmt.Fprintln(os.Stderr, "SmartConfigure is a command-line tool — run it from a terminal (PowerShell, cmd, bash) with --template and --excel, not by double-clicking the .exe.")
+		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Usage: smartconfigure --template <file> --excel <file> [--out <dir>]")
 		flag.PrintDefaults()
+		pauseIfDoubleClicked()
 		os.Exit(1)
 	}
 
@@ -116,6 +127,23 @@ func main() {
 func fatalf(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "Error: "+format+"\n", args...)
 	os.Exit(1)
+}
+
+// pauseIfDoubleClicked keeps the console window open only in the specific
+// "ran with zero arguments" case, which almost always means the .exe was
+// double-clicked from Explorer rather than launched from an existing
+// terminal. It's skipped entirely when stdin isn't a real interactive
+// console (piped, redirected, CI), so it can never hang an automated run.
+func pauseIfDoubleClicked() {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return
+	}
+	if (fi.Mode() & os.ModeCharDevice) == 0 {
+		return
+	}
+	fmt.Println("\nPress Enter to close this window...")
+	bufio.NewReader(os.Stdin).ReadString('\n')
 }
 
 func sanitizeFilename(s string) string {
