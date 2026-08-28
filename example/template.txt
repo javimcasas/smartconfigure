@@ -1,0 +1,51 @@
+system-view
+sysname {SWITCH_NAME}
+commit
+
+stelnet server enable
+stelnet ipv4 server enable
+user-interface vty 0 4
+ authentication-mode aaa
+ protocol inbound all
+commit
+
+aaa
+ local-user sshadmin password irreversible-cipher {SSH_PASSWORD}
+ undo local-user policy password expire
+ local-user sshadmin privilege level 3
+ local-user sshadmin service-type ssh
+ local-user sshadmin password expire 0
+ local-user sshadmin password-force-change disable
+commit
+
+ssh user sshadmin
+ssh user sshadmin authentication-type all
+ssh user sshadmin service-type all
+commit
+quit
+
+ssh client first-time enable
+ssh server ip-block disable
+ssh server-source all-interface
+
+aaa
+ local-aaa-user password policy administrator
+ undo password alert original
+ password expire 0
+commit
+
+system-view
+lldp enable
+ip vpn-instance _management_vpn_
+ ipv4-family
+quit
+
+ip route-static vpn-instance _management_vpn_ 0.0.0.0 0.0.0.0 {GATEWAY_IP}
+interface MEth0/0/0
+
+ ip binding vpn-instance _management_vpn_
+ ip address {MGMT_IP} {SUBNET_MASK}
+
+commit
+quit
+save

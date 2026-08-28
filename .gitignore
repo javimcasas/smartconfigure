@@ -1,0 +1,6 @@
+/dist/
+/smartconfigure-output/
+*.log
+.DS_Store
+smartconfigure
+smartconfigure.exe
