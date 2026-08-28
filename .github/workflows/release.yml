@@ -9,23 +9,48 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  # Windows + Linux are cross-compiled from a single Ubuntu runner using
+  # fyne-cross, which runs the actual build inside Docker images that
+  # already bundle the right C toolchains (mingw for Windows, native gcc
+  # for Linux). This avoids needing separate native runners for those two.
+  build-windows-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Install fyne-cross
+        run: go install github.com/fyne-io/fyne-cross@latest
+
+      - name: Build Windows binary
+        run: fyne-cross windows -arch=amd64 -app-id com.javimcasas.smartconfigure -output smartconfigure
+
+      - name: Build Linux binary
+        run: fyne-cross linux -arch=amd64 -app-id com.javimcasas.smartconfigure -output smartconfigure
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p dist
+          cp fyne-cross/dist/windows-amd64/smartconfigure.exe dist/smartconfigure-windows-amd64.exe
+          cp fyne-cross/dist/linux-amd64/smartconfigure.tar.xz dist/smartconfigure-linux-amd64.tar.xz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smartconfigure-windows-linux
+          path: dist/*
+
+  # macOS is built natively on a real macOS runner: Fyne needs cgo, and
+  # cross-compiling *to* darwin from Linux requires extracting Apple's SDK
+  # from Xcode manually (a licensing/automation headache), while building
+  # natively on macOS needs no extra setup at all.
+  build-macos:
+    runs-on: macos-latest
     strategy:
       matrix:
-        include:
-          - goos: windows
-            goarch: amd64
-            ext: ".exe"
-          - goos: linux
-            goarch: amd64
-            ext: ""
-          - goos: darwin
-            goarch: amd64
-            ext: ""
-          - goos: darwin
-            goarch: arm64
-            ext: ""
-    runs-on: ubuntu-latest
+        goarch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4
 
@@ -38,21 +63,20 @@ jobs:
 
       - name: Build binary
         env:
-          GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
+          CGO_ENABLED: 1
         run: |
           mkdir -p dist
           go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
-            -o dist/smartconfigure-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} .
+            -o dist/smartconfigure-darwin-${{ matrix.goarch }} .
 
       - uses: actions/upload-artifact@v4
         with:
-          name: smartconfigure-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: smartconfigure-darwin-${{ matrix.goarch }}
           path: dist/*
 
   release:
-    needs: build
+    needs: [build-windows-linux, build-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

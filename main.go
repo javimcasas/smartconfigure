@@ -1,15 +1,14 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
+	"github.com/javimcasas/smartconfigure/internal/batch"
 	"github.com/javimcasas/smartconfigure/internal/excelsheet"
-	"github.com/javimcasas/smartconfigure/internal/report"
+	"github.com/javimcasas/smartconfigure/internal/gui"
 	"github.com/javimcasas/smartconfigure/internal/sshrunner"
 	"github.com/javimcasas/smartconfigure/internal/template"
 )
@@ -19,8 +18,8 @@ import (
 var version = "dev"
 
 func main() {
-	templatePath := flag.String("template", "", "Path to the command template file (required)")
-	excelPath := flag.String("excel", "", "Path to the devices Excel file (required)")
+	templatePath := flag.String("template", "", "Path to the command template file")
+	excelPath := flag.String("excel", "", "Path to the devices Excel file")
 	outDir := flag.String("out", "smartconfigure-output", "Output directory for logs and report")
 	port := flag.Int("port", 22, "SSH port")
 	connectTimeout := flag.Duration("connect-timeout", 10*time.Second, "SSH connection timeout")
@@ -35,19 +34,19 @@ func main() {
 		return
 	}
 
+	// No --template/--excel at all: this is a double-click launch (or just
+	// running the binary with no arguments), so open the graphical
+	// interface instead of a bare command-line usage message. The CLI
+	// flags below remain fully functional for scripted/automated use —
+	// the GUI and the CLI share the exact same batch.Run() engine.
+	if *templatePath == "" && *excelPath == "" {
+		gui.Launch(version)
+		return
+	}
+
 	if *templatePath == "" || *excelPath == "" {
-		// This is the classic "double-clicked the .exe from Explorer" case:
-		// no flags were given, so there's nothing useful to run. Explorer
-		// closes the console window the instant this process exits, so
-		// without a pause the user only sees a flash and nothing else.
-		// (We deliberately do NOT pause anywhere else in the program: if
-		// it was launched from an already-open terminal, that terminal
-		// stays open on its own and a forced pause would just be annoying.)
-		fmt.Fprintln(os.Stderr, "SmartConfigure is a command-line tool — run it from a terminal (PowerShell, cmd, bash) with --template and --excel, not by double-clicking the .exe.")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "Usage: smartconfigure --template <file> --excel <file> [--out <dir>]")
-		flag.PrintDefaults()
-		pauseIfDoubleClicked()
+		fmt.Fprintln(os.Stderr, "Both --template and --excel are required together on the command line.")
+		fmt.Fprintln(os.Stderr, "Run smartconfigure with no flags at all to use the graphical interface instead.")
 		os.Exit(1)
 	}
 
@@ -60,7 +59,6 @@ func main() {
 	if err != nil {
 		fatalf("Could not read Excel file: %v", err)
 	}
-
 	if len(devices) == 0 {
 		fatalf("The Excel file has no device rows to process.")
 	}
@@ -75,40 +73,27 @@ func main() {
 	fmt.Printf("Loaded template with %d line(s) and %d variable(s): %v\n", len(tmpl.Lines), len(tmpl.Variables), tmpl.Variables)
 	fmt.Printf("Loaded %d device(s) from %s\n\n", len(devices), *excelPath)
 
-	cfg := sshrunner.Config{
-		Port:           *port,
-		ConnectTimeout: *connectTimeout,
-		IdleTimeout:    *idleTimeout,
-		LineTimeout:    *lineTimeout,
-	}
-
-	results := make([]report.Result, 0, len(devices))
-
-	for i, dev := range devices {
-		fmt.Printf("[%d/%d] %s ... ", i+1, len(devices), dev.IP)
-		start := time.Now()
-
-		logPath := filepath.Join(*outDir, sanitizeFilename(dev.IP)+".log")
-
-		var res report.Result
-		if *dryRun {
-			res = sshrunner.DryRun(dev, tmpl.Lines, logPath)
-		} else {
-			res = sshrunner.Run(dev, tmpl.Lines, cfg, logPath)
-		}
-		res.Duration = time.Since(start)
-
-		if res.Success {
-			fmt.Printf("OK (%s)\n", res.Duration.Round(time.Millisecond))
-		} else {
-			fmt.Printf("FAILED (%s): %s\n", res.Duration.Round(time.Millisecond), res.Error)
-		}
-		results = append(results, res)
-	}
-
-	reportPath := filepath.Join(*outDir, "report.csv")
-	if err := report.WriteCSV(reportPath, results); err != nil {
-		fatalf("Could not write report: %v", err)
+	results, err := batch.Run(batch.Options{
+		Devices: devices,
+		Lines:   tmpl.Lines,
+		OutDir:  *outDir,
+		DryRun:  *dryRun,
+		SSH: sshrunner.Config{
+			Port:           *port,
+			ConnectTimeout: *connectTimeout,
+			IdleTimeout:    *idleTimeout,
+			LineTimeout:    *lineTimeout,
+		},
+		OnProgress: func(p batch.Progress) {
+			if p.Result.Success {
+				fmt.Printf("[%d/%d] %s ... OK (%s)\n", p.Index, p.Total, p.Device, p.Result.Duration.Round(time.Millisecond))
+			} else {
+				fmt.Printf("[%d/%d] %s ... FAILED (%s): %s\n", p.Index, p.Total, p.Device, p.Result.Duration.Round(time.Millisecond), p.Result.Error)
+			}
+		},
+	})
+	if err != nil {
+		fatalf("%v", err)
 	}
 
 	ok := 0
@@ -127,34 +112,4 @@ func main() {
 func fatalf(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "Error: "+format+"\n", args...)
 	os.Exit(1)
-}
-
-// pauseIfDoubleClicked keeps the console window open only in the specific
-// "ran with zero arguments" case, which almost always means the .exe was
-// double-clicked from Explorer rather than launched from an existing
-// terminal. It's skipped entirely when stdin isn't a real interactive
-// console (piped, redirected, CI), so it can never hang an automated run.
-func pauseIfDoubleClicked() {
-	fi, err := os.Stdin.Stat()
-	if err != nil {
-		return
-	}
-	if (fi.Mode() & os.ModeCharDevice) == 0 {
-		return
-	}
-	fmt.Println("\nPress Enter to close this window...")
-	bufio.NewReader(os.Stdin).ReadString('\n')
-}
-
-func sanitizeFilename(s string) string {
-	out := make([]rune, 0, len(s))
-	for _, r := range s {
-		switch r {
-		case '/', '\\', ':', '*', '?', '"', '<', '>', '|':
-			out = append(out, '_')
-		default:
-			out = append(out, r)
-		}
-	}
-	return string(out)
 }
