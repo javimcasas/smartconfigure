@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SmartConfigure Log Viewer · SmartMatrix</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+<style>
+  .lv-wrap { max-width: 980px; margin: 0 auto; padding: 2rem 1.4rem 4rem; }
+
+  .lv-back {
+    display: inline-flex; align-items: center; gap: 0.4rem; color: var(--text-muted, #667085);
+    text-decoration: none; font-size: 0.85rem; font-weight: 600; margin-bottom: 2rem;
+  }
+  .lv-back:hover { color: var(--primary, #4f46e5); }
+
+  .lv-hero { text-align: center; margin-bottom: 2rem; }
+  .lv-icon {
+    width: 56px; height: 56px; border-radius: var(--radius-lg, 18px); background: var(--primary, #4f46e5);
+    color: #fff; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.1rem;
+  }
+  .lv-icon svg { width: 30px; height: 30px; }
+  .lv-hero h1 { font-size: 1.75rem; letter-spacing: -0.02em; margin: 0 0 0.6rem; color: var(--text, #1e293b); }
+  .lv-hero p { color: var(--text-muted, #667085); font-size: 1rem; line-height: 1.6; margin: 0 auto; max-width: 560px; }
+
+  /* ── Drop zone ── */
+  .lv-dropzone {
+    border: 1.5px dashed var(--border, #e5e9f2); border-radius: var(--radius-lg, 18px);
+    padding: 2.2rem 1.4rem; text-align: center; background: var(--surface, #fff);
+    display: flex; flex-direction: column; align-items: center; gap: 0.8rem; cursor: pointer;
+    transition: border-color .15s, background .15s; margin-bottom: 2rem;
+  }
+  .lv-dropzone.drag-over, .lv-dropzone:hover { border-color: var(--primary, #4f46e5); background: var(--primary-light, #eef2ff); }
+  .lv-dropzone svg { width: 34px; height: 34px; color: var(--primary, #4f46e5); }
+  .lv-dropzone p { margin: 0; color: var(--text-muted, #667085); font-size: 0.92rem; }
+  .lv-dropzone p strong { color: var(--text, #1e293b); }
+  .lv-dropzone .lv-browse {
+    background: var(--primary, #4f46e5); color: #fff; border: none; border-radius: var(--radius-sm, 8px);
+    padding: 0.5rem 1rem; font-weight: 600; font-size: 0.84rem; cursor: pointer;
+  }
+  .lv-dropzone .lv-browse:hover { background: var(--primary-hover, #4338ca); }
+  .lv-clear {
+    display: block; margin: 0 auto 2rem; background: transparent; border: 1px solid var(--border, #e5e9f2);
+    color: var(--text-muted, #667085); border-radius: var(--radius-sm, 8px); padding: 0.4rem 0.9rem;
+    font-size: 0.8rem; font-weight: 600; cursor: pointer;
+  }
+  .lv-clear:hover { border-color: var(--primary, #4f46e5); color: var(--primary, #4f46e5); }
+
+  .lv-empty { text-align: center; color: var(--text-muted, #667085); font-size: 0.88rem; padding: 1.5rem 0; }
+
+  /* ── Summary ── */
+  .lv-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8rem; margin-bottom: 2rem; }
+  .lv-stat {
+    background: var(--surface, #fff); border: 1px solid var(--border, #e5e9f2); border-radius: var(--radius-md, 12px);
+    padding: 1rem; text-align: center;
+  }
+  .lv-stat .lv-stat-num { font-size: 1.6rem; font-weight: 700; color: var(--text, #1e293b); letter-spacing: -0.02em; }
+  .lv-stat .lv-stat-label { font-size: 0.74rem; color: var(--text-muted, #667085); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 0.2rem; }
+  .lv-stat.lv-stat-ok .lv-stat-num { color: #16a34a; }
+  .lv-stat.lv-stat-fail .lv-stat-num { color: #dc2626; }
+
+  /* ── CSV table ── */
+  .lv-section-title { font-size: 1.02rem; margin: 0 0 0.8rem; color: var(--text, #1e293b); letter-spacing: -0.01em; }
+  .lv-csv-table {
+    width: 100%; border-collapse: collapse; background: var(--surface, #fff);
+    border: 1px solid var(--border, #e5e9f2); border-radius: var(--radius-md, 12px); overflow: hidden;
+    font-size: 0.85rem; margin-bottom: 2rem;
+  }
+  .lv-csv-table th, .lv-csv-table td { padding: 0.55rem 0.9rem; text-align: left; border-bottom: 1px solid var(--border, #e5e9f2); }
+  .lv-csv-table th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted, #667085); }
+  .lv-csv-table tr:last-child td { border-bottom: none; }
+  .lv-csv-badge { font-weight: 700; font-size: 0.78rem; }
+  .lv-csv-badge.ok { color: #16a34a; }
+  .lv-csv-badge.fail { color: #dc2626; }
+
+  /* ── Device cards ── */
+  .lv-devices { display: flex; flex-direction: column; gap: 0.7rem; }
+  .lv-device {
+    background: var(--surface, #fff); border: 1px solid var(--border, #e5e9f2); border-radius: var(--radius-md, 12px);
+    overflow: hidden;
+  }
+  .lv-device-header {
+    display: flex; align-items: center; gap: 0.8rem; padding: 0.8rem 1rem; cursor: pointer; user-select: none;
+  }
+  .lv-device-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .lv-device-dot.ok { background: #16a34a; }
+  .lv-device-dot.fail { background: #dc2626; }
+  .lv-device-info { flex: 1; min-width: 0; }
+  .lv-device-name { font-weight: 700; font-size: 0.92rem; color: var(--text, #1e293b); }
+  .lv-device-meta { font-size: 0.76rem; color: var(--text-muted, #667085); margin-top: 1px; }
+  .lv-device-meta span + span::before { content: ' · '; }
+  .lv-device-badge {
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
+    padding: 0.2rem 0.55rem; border-radius: 999px; flex-shrink: 0;
+  }
+  .lv-device-badge.ok    { background: rgba(22,163,74,.12);  color: #16a34a; }
+  .lv-device-badge.fail  { background: rgba(220,38,38,.12);  color: #dc2626; }
+  .lv-device-badge.dry   { background: rgba(79,70,229,.12);  color: var(--primary, #4f46e5); }
+  .lv-device-chevron { width: 16px; height: 16px; color: var(--text-muted, #667085); transition: transform .18s; flex-shrink: 0; }
+  .lv-device.open .lv-device-chevron { transform: rotate(180deg); }
+
+  .lv-device-body { display: none; border-top: 1px solid var(--border, #e5e9f2); padding: 0.9rem 1rem 1.1rem; }
+  .lv-device.open .lv-device-body { display: block; }
+
+  .lv-tsection { margin-bottom: 0.6rem; border-radius: var(--radius-sm, 8px); overflow: hidden; border: 1px solid var(--border, #e5e9f2); }
+  .lv-tsection.err { border-color: rgba(220,38,38,.4); }
+  .lv-tsection-head {
+    display: flex; align-items: baseline; gap: 0.6rem; padding: 0.4rem 0.7rem;
+    background: var(--primary-light, #eef2ff); font-size: 0.78rem;
+  }
+  .lv-tsection.err .lv-tsection-head { background: rgba(220,38,38,.08); }
+  .lv-tsection-time { font-family: monospace; color: var(--text-muted, #667085); flex-shrink: 0; }
+  .lv-tsection-title { font-weight: 700; color: var(--text, #1e293b); word-break: break-all; }
+  .lv-tsection.err .lv-tsection-title { color: #dc2626; }
+  .lv-tsection-body {
+    margin: 0; padding: 0.6rem 0.8rem; font-family: monospace; font-size: 0.78rem; line-height: 1.55;
+    white-space: pre-wrap; word-break: break-word; color: var(--text, #1e293b); background: var(--bg, #f8fafc);
+    max-height: 260px; overflow-y: auto;
+  }
+
+  .lv-device-footer-line {
+    display: flex; justify-content: space-between; gap: 0.8rem; font-size: 0.78rem;
+    color: var(--text-muted, #667085); padding-top: 0.5rem; border-top: 1px dashed var(--border, #e5e9f2); margen-top: 0.5rem;
+  }
+
+  @media (max-width: 720px) {
+    .lv-summary { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 480px) {
+    .lv-hero h1 { font-size: 1.4rem; }
+    .lv-wrap { padding: 1.4rem 1rem 3rem; }
+    .lv-csv-table { font-size: 0.78rem; }
+  }
+</style>
+</head>
+<body>
+  <div class="lv-wrap">
+
+    <a class="lv-back" href="/">← Back to SmartConfigure</a>
+
+    <div class="lv-hero">
+      <div class="lv-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 3v5h5"/><path d="M6 3h8l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>
+          <line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/>
+        </svg>
+      </div>
+      <h1>SmartConfigure Log Viewer</h1>
+      <p>Drop the <code>.log</code> files SmartConfigure generates for each device (and <code>report.csv</code> if you have it) to get a clear, readable breakdown of the run — everything is parsed locally in your browser, nothing is uploaded anywhere.</p>
+    </div>
+
+    <div class="lv-dropzone" id="lvDropzone">
+      <input type="file" id="lvFileInput" accept=".log,.csv,.txt" multiple hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <p>Drag your <strong>.log</strong> files here (and <strong>report.csv</strong> if you have it)</p>
+      <button class="lv-browse" id="lvBrowseBtn" type="button">Choose files</button>
+    </div>
+
+    <button class="lv-clear hidden" id="lvClearBtn" type="button">Clear and load different files</button>
+
+    <div id="lvEmpty" class="lv-empty">No files loaded yet.</div>
+
+    <div id="lvResults" class="hidden">
+      <div class="lv-summary" id="lvSummary"></div>
+
+      <div id="lvCsvSection" class="hidden">
+        <p class="lv-section-title">Batch report (report.csv)</p>
+        <table class="lv-csv-table" id="lvCsvTable"></table>
+      </div>
+
+      <p class="lv-section-title">Per-device logs</p>
+      <div class="lv-devices" id="lvDevices"></div>
+    </div>
+
+  </div>
+
+<script>
+(function () {
+  var THEME_KEY = 'smartmatrix_theme';
+  var saved = localStorage.getItem(THEME_KEY);
+  var theme = saved || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  document.documentElement.setAttribute('data-theme', theme);
+})();
+
+// ─── Log parsing ───────────────────────────────────────────────────────────
+// Mirrors the exact structure written by SmartConfigure's sshrunner package:
+// a header block, then repeated "separator / HH:MM:SS.mmm title / separator
+// / body" sections, then a final footer block starting with "RESULT:".
+var SEP_RE = /^─+\s*$/;
+
+function parseLog(text) {
+  var lines = text.replace(/\r\n/g, '\n').split('\n');
+  var i = 0;
+
+  var titleLine = (lines[i++] || '').trim();
+  var isDryRun = /DRY RUN/i.test(titleLine);
+
+  var kv = {};
+  while (i < lines.length && !SEP_RE.test(lines[i])) {
+    var m = lines[i].match(/^([A-Za-z][A-Za-z ]*?):\s+(.*)$/);
+    if (m) kv[m[1].trim()] = m[2].trim();
+    i++;
+  }
+  var header = {
+    title: titleLine,
+    isDryRun: isDryRun,
+    device: kv['Device'] || '',
+    user: kv['User'] || '',
+    port: kv['Port'] || '',
+    templateSize: kv['Template size'] || '',
+    started: kv['Started'] || ''
+  };
+
+  while (i < lines.length && (SEP_RE.test(lines[i]) || lines[i].trim() === '')) i++;
+
+  var sections = [];
+  var footer = null;
+
+  while (i < lines.length) {
+    if (!SEP_RE.test(lines[i])) { i++; continue; }
+    i++;
+    if (i >= lines.length) break;
+
+    if (/^RESULT:/.test(lines[i])) {
+      var resultLine = lines[i++];
+      var success = /RESULT:\s*(SUCCESS|DRY-RUN OK)/i.test(resultLine);
+      var resultText = resultLine.replace(/^RESULT:\s*/, '').trim();
+      var fkv = {};
+      while (i < lines.length && !SEP_RE.test(lines[i])) {
+        var fm = lines[i].match(/^([A-Za-z]+):\s+(.*)$/);
+        if (fm) fkv[fm[1].trim()] = fm[2].trim();
+        i++;
+      }
+      footer = {
+        success: success,
+        resultText: resultText,
+        finished: fkv['Finished'] || '',
+        duration: fkv['Duration'] || ''
+      };
+      break;
+    }
+
+    var tLine = lines[i++] || '';
+    var tm = tLine.match(/^(\d{2}:\d{2}:\d{2}\.\d{3})\s+(.*)$/);
+    var timestamp = tm ? tm[1] : '';
+    var title = tm ? tm[2] : tLine;
+
+    if (i < lines.length && SEP_RE.test(lines[i])) i++;
+
+    var bodyLines = [];
+    while (i < lines.length && !SEP_RE.test(lines[i])) {
+      bodyLines.push(lines[i]);
+      i++;
+    }
+    while (bodyLines.length && bodyLines[bodyLines.length - 1].trim() === '') bodyLines.pop();
+
+    var isError = /^STOPPED$/i.test(title) || /FAILED/i.test(title) ||
+      /% Unrecognized command|% Wrong parameter|Error: |% Invalid|Unrecognized command found/i.test(bodyLines.join('\n'));
+
+    sections.push({ timestamp: timestamp, title: title, body: bodyLines.join('\n'), isError: isError });
+  }
+
+  return { header: header, sections: sections, footer: footer };
+}
+
+function parseCsv(text) {
+  var lines = text.replace(/\r\n/g, '\n').split('\n').filter(function (l) { return l.trim() !== ''; });
+  if (!lines.length) return [];
+  var rows = lines.slice(1).map(function (line) {
+    // Simple CSV split good enough for report.csv (no embedded commas expected in Device/Status/Duration; Error may contain commas so join the tail).
+    var parts = line.split(',');
+    return {
+      device: parts[0] || '',
+      status: parts[1] || '',
+      duration: parts[2] || '',
+      error: parts.slice(3).join(',') || ''
+    };
+  });
+  return rows;
+}
+
+// ─── Rendering ───────────────────────────────────────────────────────────
+var state = { logs: [], csvRows: [] };
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function render() {
+  var hasData = state.logs.length > 0 || state.csvRows.length > 0;
+  document.getElementById('lvEmpty').classList.toggle('hidden', hasData);
+  document.getElementById('lvResults').classList.toggle('hidden', !hasData);
+  document.getElementById('lvClearBtn').classList.toggle('hidden', !hasData);
+  if (!hasData) return;
+
+  var total = state.logs.length;
+  var ok = state.logs.filter(function (l) { return l.footer && l.footer.success; }).length;
+  var fail = total - ok;
+  var totalMs = state.logs.reduce(function (sum, l) {
+    var d = l.footer ? parseDurationMs(l.footer.duration) : 0;
+    return sum + d;
+  }, 0);
+
+  document.getElementById('lvSummary').innerHTML =
+    '<div class="lv-stat"><div class="lv-stat-num">' + total + '</div><div class="lv-stat-label">Devices</div></div>' +
+    '<div class="lv-stat lv-stat-ok"><div class="lv-stat-num">' + ok + '</div><div class="lv-stat-label">Succeeded</div></div>' +
+    '<div class="lv-stat lv-stat-fail"><div class="lv-stat-num">' + fail + '</div><div class="lv-stat-label">Failed</div></div>' +
+    '<div class="lv-stat"><div class="lv-stat-num">' + formatMs(totalMs) + '</div><div class="lv-stat-label">Total time</div></div>';
+
+  var csvSection = document.getElementById('lvCsvSection');
+  if (state.csvRows.length) {
+    csvSection.classList.remove('hidden');
+    var rowsHtml = state.csvRows.map(function (r) {
+      var isOk = /^OK$/i.test(r.status);
+      return '<tr><td>' + escapeHtml(r.device) + '</td>' +
+        '<td><span class="lv-csv-badge ' + (isOk ? 'ok' : 'fail') + '">' + escapeHtml(r.status) + '</span></td>' +
+        '<td>' + escapeHtml(r.duration) + '</td>' +
+        '<td>' + escapeHtml(r.error) + '</td></tr>';
+    }).join('');
+    document.getElementById('lvCsvTable').innerHTML =
+      '<tr><th>Device</th><th>Status</th><th>Duration</th><th>Error</th></tr>' + rowsHtml;
+  } else {
+    csvSection.classList.add('hidden');
+  }
+
+  var devicesEl = document.getElementById('lvDevices');
+  devicesEl.innerHTML = '';
+  state.logs.forEach(function (log, idx) {
+    devicesEl.appendChild(buildDeviceCard(log, idx));
+  });
+}
+
+function parseDurationMs(str) {
+  if (!str) return 0;
+  var totalMs = 0;
+  var hM = str.match(/([\d.]+)h/); if (hM) totalMs += parseFloat(hM[1]) * 3600000;
+  var mM = str.match(/([\d.]+)m(?!s)/); if (mM) totalMs += parseFloat(mM[1]) * 60000;
+  var sM = str.match(/([\d.]+)s/); if (sM) totalMs += parseFloat(sM[1]) * 1000;
+  var msM = str.match(/([\d.]+)ms/); if (msM && !sM) totalMs += parseFloat(msM[1]);
+  if (!hM && !mM && !sM && !msM) totalMs = parseFloat(str) || 0;
+  return totalMs;
+}
+function formatMs(ms) {
+  if (ms < 1000) return Math.round(ms) + 'ms';
+  var s = ms / 1000;
+  if (s < 60) return s.toFixed(1) + 's';
+  var m = Math.floor(s / 60);
+  var rem = Math.round(s % 60);
+  return m + 'm ' + rem + 's';
+}
+
+function buildDeviceCard(log, idx) {
+  var h = log.header, f = log.footer;
+  var success = f ? f.success : false;
+  var badgeClass = !f ? 'fail' : (h.isDryRun ? 'dry' : (success ? 'ok' : 'fail'));
+  var badgeText = !f ? 'INCOMPLETE' : (h.isDryRun ? (success ? 'DRY-RUN OK' : 'DRY-RUN FAILED') : (success ? 'SUCCESS' : 'FAILED'));
+
+  var card = document.createElement('div');
+  card.className = 'lv-device';
+  card.innerHTML =
+    '<div class="lv-device-header">' +
+      '<span class="lv-device-dot ' + (success ? 'ok' : 'fail') + '"></span>' +
+      '<div class="lv-device-info">' +
+        '<div class="lv-device-name">' + escapeHtml(h.device || 'Unknown device') + '</div>' +
+        '<div class="lv-device-meta">' +
+          (h.user ? '<span>' + escapeHtml(h.user) + '</span>' : '') +
+          (h.port ? '<span>port ' + escapeHtml(h.port) + '</span>' : '') +
+          (h.templateSize ? '<span>' + escapeHtml(h.templateSize) + '</span>' : '') +
+          (f && f.duration ? '<span>' + escapeHtml(f.duration) + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<span class="lv-device-badge ' + badgeClass + '">' + badgeText + '</span>' +
+      '<svg class="lv-device-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>' +
+    '</div>' +
+    '<div class="lv-device-body"></div>';
+
+  var body = card.querySelector('.lv-device-body');
+  var sectionsHtml = log.sections.map(function (s) {
+    return '<div class="lv-tsection' + (s.isError ? ' err' : '') + '">' +
+      '<div class="lv-tsection-head">' +
+        (s.timestamp ? '<span class="lv-tsection-time">' + escapeHtml(s.timestamp) + '</span>' : '') +
+        '<span class="lv-tsection-title">' + escapeHtml(s.title) + '</span>' +
+      '</div>' +
+      '<pre class="lv-tsection-body">' + escapeHtml(s.body || '(no output)') + '</pre>' +
+    '</div>';
+  }).join('');
+
+  var footerHtml = f
+    ? '<div class="lv-device-footer-line"><span>Started: ' + escapeHtml(h.started) + '</span><span>Finished: ' + escapeHtml(f.finished) + '</span></div>'
+    : '<div class="lv-device-footer-line"><span>Started: ' + escapeHtml(h.started) + '</span><span>Log ended unexpectedly (no footer found)</span></div>';
+
+  body.innerHTML = sectionsHtml + footerHtml;
+
+  card.querySelector('.lv-device-header').addEventListener('click', function () {
+    card.classList.toggle('open');
+  });
+
+  return card;
+}
+
+// ─── File handling ─────────────────────────────────────────────────────────
+function handleFiles(fileList) {
+  var files = Array.prototype.slice.call(fileList);
+  var pending = files.length;
+  if (!pending) return;
+
+  files.forEach(function (file) {
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var text = e.target.result;
+      if (/\.csv$/i.test(file.name)) {
+        state.csvRows = state.csvRows.concat(parseCsv(text));
+      } else {
+        try {
+          state.logs.push(parseLog(text));
+        } catch (err) { /* skip files that don't match the expected format */ }
+      }
+      pending--;
+      if (pending === 0) render();
+    };
+    reader.readAsText(file);
+  });
+}
+
+var dropZone = document.getElementById('lvDropzone');
+var fileInput = document.getElementById('lvFileInput');
+
+document.getElementById('lvBrowseBtn').addEventListener('click', function () { fileInput.click(); });
+dropZone.addEventListener('click', function (e) {
+  if (e.target.id !== 'lvBrowseBtn') fileInput.click();
+});
+fileInput.addEventListener('change', function (e) { handleFiles(e.target.files); e.target.value = ''; });
+
+dropZone.addEventListener('dragover', function (e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', function () { dropZone.classList.remove('drag-over'); });
+dropZone.addEventListener('drop', function (e) {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  handleFiles(e.dataTransfer.files);
+});
+
+document.getElementById('lvClearBtn').addEventListener('click', function () {
+  state = { logs: [], csvRows: [] };
+  render();
+});
+</script>
+</body>
+</html>
