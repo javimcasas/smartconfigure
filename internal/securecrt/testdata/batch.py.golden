@@ -1,0 +1,106 @@
+#$language = "Python3"
+#$interface = "1.0"
+
+# SmartConfigure - SecureCRT batch script
+# Generated 2026-09-17 10:30:00 by SmartConfigure v0.2.0
+#   template: C:\work\template.txt
+#   devices:  C:\work\equipos.xlsx (2 row(s))
+#
+# Run it from SecureCRT: Script > Run... > pick this file. For each device it
+# opens an SSH2 session, sends the commands below one line at a time (waiting
+# for the device prompt after each one), logs the whole session to
+# <host>.securecrt.log next to this script, disconnects and moves on. A device
+# that fails to connect is skipped, the rest of the batch continues.
+#
+# WARNING: this file contains the usernames and passwords from the Excel.
+# Treat it like the Excel itself - do not share, upload or commit it.
+
+import os
+
+PORT = 22
+IDLE_MS = 800
+LINE_TIMEOUT_S = 15
+
+DEVICES = [
+    {
+        "host": "10.10.1.21",
+        "user": "admin",
+        "password": "p\"a&s\\s\tw\u00f6rd",
+        "lines": [
+            "system-view",
+            "sysname SW-CORE-01",
+            "commit",
+            "aaa",
+            " local-user sshadmin password irreversible-cipher Ssh#2026",
+            "commit",
+            "ip route-static vpn-instance _management_vpn_ 0.0.0.0 0.0.0.0 10.10.1.1",
+            "interface MEth0/0/0",
+            " ip address 10.10.1.21 255.255.255.0",
+            "commit",
+            "save",
+        ],
+    },
+    {
+        "host": "10.10.1.22",
+        "user": "admin",
+        "password": "plain",
+        "lines": [
+            "system-view",
+            "sysname SW-CORE-02",
+            "commit",
+            "aaa",
+            " local-user sshadmin password irreversible-cipher Ssh#2026",
+            "commit",
+            "ip route-static vpn-instance _management_vpn_ 0.0.0.0 0.0.0.0 10.10.1.1",
+            "interface MEth0/0/0",
+            " ip address 10.10.1.22 255.255.255.0",
+            "commit",
+            "save",
+        ],
+    },
+]
+
+
+def run_device(dev, log_dir):
+    """Connects, sends every line, logs, disconnects. False when the
+    connection could not be established; the caller moves on."""
+    try:
+        crt.Session.Connect('/SSH2 /L "%s" /PASSWORD "%s" /P %d /ACCEPTHOSTKEYS %s'
+                            % (dev["user"], dev["password"], PORT, dev["host"]))
+    except Exception:
+        return False
+    if not crt.Session.Connected:
+        return False
+
+    crt.Session.LogFileName = os.path.join(log_dir, dev["host"] + ".securecrt.log")
+    crt.Session.Log(True)
+    crt.Screen.Synchronous = True
+
+    # Login banner / first prompt. VRP prompts end in > (user view) or ] (system view).
+    crt.Screen.WaitForStrings([">", "]"], LINE_TIMEOUT_S)
+
+    for cmd in dev["lines"]:
+        crt.Screen.Send(cmd + "\r")
+        crt.Screen.WaitForStrings([">", "]"], LINE_TIMEOUT_S)
+        crt.Sleep(IDLE_MS)
+
+    crt.Session.Log(False)
+    crt.Session.Disconnect()
+    while crt.Session.Connected:
+        crt.Sleep(100)
+    crt.Sleep(500)
+    return True
+
+
+def main():
+    log_dir = os.path.dirname(crt.ScriptFullName)
+    ok = failed = 0
+    for dev in DEVICES:
+        if run_device(dev, log_dir):
+            ok += 1
+        else:
+            failed += 1
+    crt.Dialog.MessageBox("SmartConfigure batch finished: %d OK, %d failed.\nLogs: %s" % (ok, failed, log_dir))
+
+
+main()

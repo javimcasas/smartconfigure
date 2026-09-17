@@ -1,0 +1,104 @@
+#$language = "VBScript"
+#$interface = "1.0"
+
+' SmartConfigure - SecureCRT batch script
+' Generated 2026-09-17 10:30:00 by SmartConfigure v0.2.0
+'   template: C:\work\template.txt
+'   devices:  C:\work\equipos.xlsx (2 row(s))
+'
+' Run it from SecureCRT: Script > Run... > pick this file. For each device it
+' opens an SSH2 session, sends the commands below one line at a time (waiting
+' for the device prompt after each one), logs the whole session to
+' <host>.securecrt.log next to this script, disconnects and moves on. A device
+' that fails to connect is skipped, the rest of the batch continues.
+'
+' WARNING: this file contains the usernames and passwords from the Excel.
+' Treat it like the Excel itself - do not share, upload or commit it.
+
+Option Explicit
+
+Const PORT = 22
+Const IDLE_MS = 800
+Const LINE_TIMEOUT_S = 15
+
+Sub Main
+  Dim logDir
+  logDir = Left(crt.ScriptFullName, InStrRev(crt.ScriptFullName, "\"))
+
+  Dim devices(1)
+  devices(0) = Array("10.10.1.21", "admin", "p""a&s\s" & ChrW(9) & "w" & ChrW(246) & "rd", Array( _
+    "system-view", _
+    "sysname SW-CORE-01", _
+    "commit", _
+    "aaa", _
+    " local-user sshadmin password irreversible-cipher Ssh#2026", _
+    "commit", _
+    "ip route-static vpn-instance _management_vpn_ 0.0.0.0 0.0.0.0 10.10.1.1", _
+    "interface MEth0/0/0", _
+    " ip address 10.10.1.21 255.255.255.0", _
+    "commit", _
+    "save" _
+  ))
+  devices(1) = Array("10.10.1.22", "admin", "plain", Array( _
+    "system-view", _
+    "sysname SW-CORE-02", _
+    "commit", _
+    "aaa", _
+    " local-user sshadmin password irreversible-cipher Ssh#2026", _
+    "commit", _
+    "ip route-static vpn-instance _management_vpn_ 0.0.0.0 0.0.0.0 10.10.1.1", _
+    "interface MEth0/0/0", _
+    " ip address 10.10.1.22 255.255.255.0", _
+    "commit", _
+    "save" _
+  ))
+
+  Dim i, ok, failed
+  ok = 0 : failed = 0
+  For i = 0 To UBound(devices)
+    If RunDevice(devices(i)(0), devices(i)(1), devices(i)(2), devices(i)(3), logDir) Then
+      ok = ok + 1
+    Else
+      failed = failed + 1
+    End If
+  Next
+
+  crt.Dialog.MessageBox "SmartConfigure batch finished: " & ok & " OK, " & failed & " failed." & vbCrLf & "Logs: " & logDir
+End Sub
+
+' Connects, sends every line, logs, disconnects. Returns False when the
+' connection could not be established; the caller moves on to the next device.
+Function RunDevice(host, user, pass, lines, logDir)
+  RunDevice = False
+
+  On Error Resume Next
+  crt.Session.Connect "/SSH2 /L " & Chr(34) & user & Chr(34) & " /PASSWORD " & Chr(34) & pass & Chr(34) & " /P " & PORT & " /ACCEPTHOSTKEYS " & host
+  If Err.Number <> 0 Or Not crt.Session.Connected Then
+    Err.Clear
+    On Error GoTo 0
+    Exit Function
+  End If
+  On Error GoTo 0
+
+  crt.Session.LogFileName = logDir & host & ".securecrt.log"
+  crt.Session.Log True
+  crt.Screen.Synchronous = True
+
+  ' Login banner / first prompt. VRP prompts end in > (user view) or ] (system view).
+  crt.Screen.WaitForStrings ">", "]", LINE_TIMEOUT_S
+
+  Dim i
+  For i = 0 To UBound(lines)
+    crt.Screen.Send lines(i) & vbCr
+    crt.Screen.WaitForStrings ">", "]", LINE_TIMEOUT_S
+    crt.Sleep IDLE_MS
+  Next
+
+  crt.Session.Log False
+  crt.Session.Disconnect
+  Do While crt.Session.Connected
+    crt.Sleep 100
+  Loop
+  crt.Sleep 500
+  RunDevice = True
+End Function

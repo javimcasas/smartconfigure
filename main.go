@@ -9,6 +9,7 @@ import (
 	"github.com/javimcasas/smartconfigure/internal/batch"
 	"github.com/javimcasas/smartconfigure/internal/excelsheet"
 	"github.com/javimcasas/smartconfigure/internal/gui"
+	"github.com/javimcasas/smartconfigure/internal/securecrt"
 	"github.com/javimcasas/smartconfigure/internal/sshrunner"
 	"github.com/javimcasas/smartconfigure/internal/template"
 )
@@ -26,6 +27,7 @@ func main() {
 	idleTimeout := flag.Duration("idle-timeout", 800*time.Millisecond, "How long to wait for the device to go quiet before sending the next line")
 	lineTimeout := flag.Duration("line-timeout", 15*time.Second, "Max time to wait for a single line's output before giving up on it")
 	dryRun := flag.Bool("dry-run", false, "Validate the template and Excel without connecting to any device")
+	exportSecureCRT := flag.Bool("export-securecrt", false, "Write a SecureCRT script (.vbs + .py) that runs the batch, without connecting to any device")
 	showVersion := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
 
@@ -65,6 +67,35 @@ func main() {
 
 	if err := os.MkdirAll(*outDir, 0o755); err != nil {
 		fatalf("Could not create output directory: %v", err)
+	}
+
+	// Export mode: same inputs, same rendering, no connection at all. The
+	// generated script is what SecureCRT runs later, on a workstation where
+	// SmartConfigure itself may not be allowed to reach the devices.
+	if *exportSecureCRT {
+		rendered, err := securecrt.Build(devices, tmpl.Lines)
+		if err != nil {
+			fatalf("Could not render the template for every device: %v", err)
+		}
+		paths, err := securecrt.Write(securecrt.Batch{
+			Version:      version,
+			GeneratedAt:  time.Now(),
+			TemplatePath: *templatePath,
+			ExcelPath:    *excelPath,
+			Port:         *port,
+			IdleTimeout:  *idleTimeout,
+			LineTimeout:  *lineTimeout,
+			Devices:      rendered,
+		}, *outDir)
+		if err != nil {
+			fatalf("Could not write the SecureCRT script: %v", err)
+		}
+		fmt.Printf("SecureCRT script written for %d device(s):\n", len(rendered))
+		for _, p := range paths {
+			fmt.Printf("  %s\n", p)
+		}
+		fmt.Println("Run it from SecureCRT: Script > Run... The file contains the Excel credentials — treat it as sensitive.")
+		return
 	}
 
 	if *dryRun {

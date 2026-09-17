@@ -24,6 +24,25 @@ Al abrir el ejecutable (doble clic) se abre una ventana simple:
 4. **▶ Ejecutar**. El progreso aparece en pantalla, y al terminar puedes
    abrir directamente la carpeta con los logs y el reporte.
 
+En cuanto eliges los dos archivos, la ventana los valida y muestra cuántos
+equipos, líneas y variables hay (o el primer error) antes de ejecutar nada.
+
+### Exportar un script para SecureCRT
+
+Si desde tu puesto solo puedes llegar a los equipos con **SecureCRT**, el
+botón **Exportar script SecureCRT** genera en `smartconfigure-output/` dos
+ficheros equivalentes, `smartconfigure-securecrt.vbs` (Windows) y
+`smartconfigure-securecrt.py`, con el template ya renderizado para cada
+fila del Excel. SmartConfigure **no se conecta a nada** al exportar. Luego,
+en SecureCRT: *Script → Run…* → elige el `.vbs`. El script abre una sesión
+SSH2 por equipo, envía las líneas esperando el prompt (`>` o `]`) tras cada
+una, deja un `<IP>.securecrt.log` junto al script y sigue con el siguiente
+equipo aunque uno falle. Al terminar muestra un resumen.
+
+El script contiene los usuarios y contraseñas del Excel: trátalo como el
+propio Excel y no lo subas a ningún sitio. Si alguna fila tiene una
+variable sin valor, no se exporta nada (mismo criterio que el dry-run).
+
 Ejemplo de cabecera de Excel para el template incluido:
 
 | IP Equipo | Usuario | Contraseña | SWITCH_NAME | SSH_PASSWORD | GATEWAY_IP | MGMT_IP | SUBNET_MASK |
@@ -64,6 +83,7 @@ ningún equipo real.
 | `--excel` | — | Ruta al Excel de equipos |
 | `--out` | `smartconfigure-output` | Carpeta de salida de logs y reporte |
 | `--dry-run` | `false` | Valida template + Excel sin conectar a ningún equipo |
+| `--export-securecrt` | `false` | Escribe el script SecureCRT (`.vbs` + `.py`) en `--out` y sale, sin conectar a nada |
 | `--port` | `22` | Puerto SSH |
 | `--connect-timeout` | `10s` | Timeout de conexión SSH |
 | `--idle-timeout` | `800ms` | Cuánto esperar en silencio antes de mandar la siguiente línea |
@@ -104,6 +124,17 @@ go mod tidy
 go build -o smartconfigure .
 ```
 
+Los tests (no necesitan cgo; excluyen el paquete `gui`):
+
+```bash
+go test $(go list ./internal/... | grep -v /gui)
+```
+
+El generador de scripts SecureCRT (`internal/securecrt`) se comprueba
+contra ficheros golden en `internal/securecrt/testdata/`; tras un cambio
+intencionado del script, regenera y revisa el diff con
+`go test ./internal/securecrt -update`.
+
 ## Descargar un binario ya compilado
 
 Cada versión publicada (tag `vX.Y.Z`) genera automáticamente binarios para
@@ -117,16 +148,20 @@ https://github.com/javimcasas/smartconfigure/releases/latest/download/smartconfi
 
 ## Landing web y visor de logs
 
-La carpeta `landing/` es la página estática que Cloudflare sirve en
-`https://smartconfigure.hubsmartmatrix.com` (solo assets, sin Worker ni
-SSO): descargas, formato de entrada, flags, y un **visor de logs**
-(`logs.html`) que parsea en el navegador los `.log` y `report.csv` de una
-ejecución sin subir nada.
+La carpeta `public/` es la web que Cloudflare sirve en
+`https://smartconfigure.hubsmartmatrix.com`: descargas, formato de
+entrada, flags, y un **visor de logs** (`logs.html`) que parsea en el
+navegador los `.log` y `report.csv` de una ejecución sin subir nada. Como el
+resto de apps de SmartMatrix, `src/index.js` es un Worker que solo hace el
+handoff SSO (`?sso=` → cookie `sc_session`, 24h) y sirve los assets; sin
+sesión redirige al hub. Se despliega solo con Workers Builds en cada push a
+`main`; necesita el secreto `SSO_SHARED_SECRET` (el mismo de
+`smartmatrix-auth`) puesto con `npx wrangler secret put SSO_SHARED_SECRET`.
 
 El diseño (tokens, componentes, reglas por superficie, incluida la ventana
 Fyne) está documentado en `design-system/smartconfigure/` — leer
 `MASTER.md` antes de tocar cualquier UI. Las URLs de descarga de
-`landing/index.html` deben coincidir con los nombres de asset que genera
+`public/index.html` deben coincidir con los nombres de asset que genera
 `.github/workflows/release.yml`.
 
 ## Seguridad

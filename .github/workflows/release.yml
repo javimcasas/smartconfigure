@@ -25,6 +25,11 @@ jobs:
       - name: Tidy modules
         run: go mod tidy
 
+      # Everything except the Fyne window is plain Go: run its tests before
+      # spending minutes on the cross-compilation.
+      - name: Test
+        run: go test $(go list ./internal/... | grep -v /gui)
+
       - name: Install fyne-cross
         run: go install github.com/fyne-io/fyne-cross@latest
 

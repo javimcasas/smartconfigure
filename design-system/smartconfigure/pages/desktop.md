@@ -12,42 +12,42 @@ progress, open the folder. And the planned 10% path: export a SecureCRT
 script that runs the same batch from a workstation where only SecureCRT
 may touch the devices.
 
-## Layout (current, v0.1.x)
+## Layout (v0.2.0)
 
 ```
-┌ SmartConfigure v0.1.0 ─────────────────────────────────────────── ✕ ┐
-│ SmartConfigure (bold)                                                │
-│ Ejecuta un template de comandos SSH sobre varios equipos …           │
-│ ─────────────────────────────────────────────────────────────────── │
-│ [Elegir template (.txt)...]                                          │
-│ C:\…\template.txt                                                    │
-│ [Elegir Excel (.xlsx)...]                                            │
-│ C:\…\equipos.xlsx                                                    │
-│ ☑ Dry-run (no conectar a los equipos, solo validar)                  │
-│ [▶  Ejecutar]                 [📂 Abrir carpeta de resultados]       │
-│ ─────────────────────────────────────────────────────────────────── │
-│ Progreso:                                                            │
-│ ┌ read-only multiline (console) ──────────────────────────────────┐ │
-│ │ Modo: DRY-RUN (no conecta a nada)                                │ │
-│ │ 12 equipo(s), 44 línea(s) de template                            │ │
-│ │ [1/12] 10.10.1.21 ... OK (12ms)                                  │ │
-│ └──────────────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────────────┘
+┌ SmartConfigure v0.2.0 ────────────────────────────────────────────── ✕ ┐
+│ SmartConfigure (bold)                                                   │
+│ Ejecuta un template de comandos SSH sobre varios equipos …              │
+│ ┌ Archivos ───────────────────────────────────────────────────────────┐ │
+│ │ [📄 Elegir template (.txt)…]  C:\…\template.txt                     │ │
+│ │ [☰ Elegir Excel (.xlsx)…]     C:\…\equipos.xlsx                      │ │
+│ │ ✓ 12 equipo(s) · 44 línea(s) · 5 variable(s): SWITCH_NAME, …  (mono) │ │
+│ └─────────────────────────────────────────────────────────────────────┘ │
+│ ┌ Ejecución ──────────────────────────────────────────────────────────┐ │
+│ │ ☑ Dry-run (no conectar a los equipos, solo validar)                 │ │
+│ │ [▶ Ejecutar]  [⇩ Exportar script SecureCRT]  [📂 Abrir carpeta…]    │ │
+│ │ ▓▓▓▓▓▓▓▓▓░░░░░░░░░ 50%                                              │ │
+│ │ Ejecutando 6/12…                                                    │ │
+│ └─────────────────────────────────────────────────────────────────────┘ │
+│ Progreso                                                                │
+│ ┌ TextGrid (mono, read-only; OK rows green, FAILED/ERROR rows red) ───┐ │
+│ │ Modo: DRY-RUN (no conecta a nada)                                   │ │
+│ │ [1/12] 10.10.1.21 ... OK (12ms)                                     │ │
+│ └─────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-720×600 default. Copy is **Spanish** — the desktop tool is used by field
+860×680 default, centred. Custom Fyne theme (`scTheme`) sets only
+`ColorNamePrimary` / `ColorNameForegroundOnPrimary` to the web blue so the
+high-importance *Ejecutar* matches the landing; everything else is stock
+Fyne. Copy is **Spanish** — the desktop tool is used by field
 colleagues; the web (ecosystem convention) is English. Keep that split; do
 not half-translate either side.
 
-## Layout (planned: export a SecureCRT script)
+## Export a SecureCRT script (shipped in v0.2.0)
 
-Add a **third action** to the button row, after Run and before Open folder,
-enabled as soon as both files are chosen (it does not need a run):
-
-```
-│ ☑ Dry-run (no conectar a los equipos, solo validar)                  │
-│ [▶  Ejecutar]   [⇩ Exportar script SecureCRT]   [📂 Abrir carpeta]   │
-```
+The **third action** in the button row, after Run and before Open folder,
+enabled as soon as both files validate (it does not need a run).
 
 ### What it is (decided 2026-09-17)
 
@@ -73,7 +73,7 @@ crt.Sleep milliseconds
 crt.Session.Disconnect
 ```
 
-### Behaviour contract
+### Behaviour contract (implemented in `internal/securecrt/`)
 
 - **Inputs** go through the **same** `template.Load` / `excelsheet.Load`
   as Run, so a missing column fails here too, with the same error text in
@@ -124,11 +124,11 @@ crt.Session.Disconnect
   `--idle-timeout`, `--line-timeout` so the script uses the same timings
   as a direct run. GUI and CLI must never drift — the generator lives in
   `internal/securecrt/` and both call it.
-- **Golden-file tests** in `internal/securecrt/` against
-  `example/template.txt` + a two-row fixture Excel: the exact bytes of
-  both scripts. VBScript strings must escape `"` as `""`; Python strings
-  use `repr`-safe escaping. Test a password containing `"`, `'`, `&` and
-  a backslash.
+- **Golden-file tests** in `internal/securecrt/` (`testdata/*.golden`,
+  `go test ./internal/securecrt -update` to regenerate): the exact bytes
+  of both scripts for a two-device fixture whose password contains `"`,
+  `&`, a backslash, a tab and `ö`. VBScript strings escape `"` as `""` and
+  splice non-ASCII as `ChrW(n)`; Python strings `\u`-escape.
 - **Line endings** of the exported files: CRLF (SecureCRT on Windows
   opens them in the Script editor; Notepad-friendly).
 
@@ -142,7 +142,20 @@ crt.Session.Disconnect
 
 ## Rules
 
-- **One primary action: Run.** Everything else is secondary.
+- **One primary action: Run** (`widget.HighImportance`, blue). Export is
+  `MediumImportance`, Open folder `LowImportance`. Every button has an icon
+  from Fyne's theme set — no emoji in labels.
+- **Validate on pick, not on Run.** As soon as both files are chosen the
+  window parses them and shows `✓ N equipo(s) · N línea(s) · N variable(s)`
+  in mono, or `✗ Template: …` / `✗ Excel: …` with the loader's own error.
+  Run and Export stay disabled until it passes.
+- **Progress bar + status line** during a run (`Ejecutando 6/12…`), then a
+  one-line summary (`Hecho: 10 OK, 2 fallidos.`; dry-run says *con
+  variables sin valor* instead of *fallidos*).
+- **Console is a TextGrid**, never a disabled Entry (grey text, wrong
+  font). OK rows green, FAILED/ERROR/AVISO rows red — colour is
+  reinforcement, the word is always there.
+- **Long paths truncate with an ellipsis**, they never widen the window.
 - **Dry-run ticked on open.** Never change the default.
 - **Progress is a console, not a log viewer.** One line per device,
   `[i/N] IP ... OK (dur)` / `... FAILED (dur): error`; the full transcript

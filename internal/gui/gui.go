@@ -1,7 +1,9 @@
 package gui
 
 import (
+	_ "embed"
 	"fmt"
+	"image/color"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,181 +16,420 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/storage"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/javimcasas/smartconfigure/internal/batch"
 	"github.com/javimcasas/smartconfigure/internal/excelsheet"
+	"github.com/javimcasas/smartconfigure/internal/securecrt"
 	"github.com/javimcasas/smartconfigure/internal/sshrunner"
 	"github.com/javimcasas/smartconfigure/internal/template"
 )
 
+//go:embed icon.svg
+var iconSVG []byte
+
+// defaultSSH is what the window uses for a real run and for the SecureCRT
+// export, so a script produced here behaves like a direct run. The CLI
+// exposes the same values as flags.
+var defaultSSH = sshrunner.Config{
+	Port:           22,
+	ConnectTimeout: 10 * time.Second,
+	IdleTimeout:    800 * time.Millisecond,
+	LineTimeout:    15 * time.Second,
+}
+
+// ─── Theme ─────────────────────────────────────────────────────────────────
+
+// scTheme is Fyne's default theme with the ecosystem's blue as the primary
+// colour (design-system/smartconfigure/MASTER.md §2), so the Run button
+// matches the landing page. Everything else is stock Fyne.
+type scTheme struct{ fyne.Theme }
+
+func (t scTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
+	switch name {
+	case theme.ColorNamePrimary:
+		if variant == theme.VariantDark {
+			return color.NRGBA{R: 0x60, G: 0xA5, B: 0xFA, A: 0xFF}
+		}
+		return color.NRGBA{R: 0x1D, G: 0x4E, B: 0xD8, A: 0xFF}
+	case theme.ColorNameForegroundOnPrimary:
+		if variant == theme.VariantDark {
+			return color.NRGBA{R: 0x0B, G: 0x1A, B: 0x33, A: 0xFF}
+		}
+		return color.White
+	}
+	return t.Theme.Color(name, variant)
+}
+
+// ─── Window ────────────────────────────────────────────────────────────────
+
 // Launch opens the SmartConfigure graphical interface. It's the default
 // entry point when the binary is run with no --template/--excel flags
 // (i.e. double-clicked from Explorer/Finder), so most users never need to
-// touch a terminal at all. It shares the exact same batch.Run() engine as
-// the CLI path in main.go, so behaviour never drifts between the two.
+// touch a terminal at all. It shares the exact same batch.Run() engine and
+// securecrt generator as the CLI path in main.go, so behaviour never
+// drifts between the two.
 func Launch(version string) {
 	a := app.New()
+	a.Settings().SetTheme(scTheme{theme.DefaultTheme()})
+	icon := fyne.NewStaticResource("smartconfigure.svg", iconSVG)
+	a.SetIcon(icon)
+
 	w := a.NewWindow("SmartConfigure " + version)
-	w.Resize(fyne.NewSize(720, 600))
+	w.SetIcon(icon)
+	w.Resize(fyne.NewSize(860, 680))
+	w.CenterOnScreen()
 
-	var templatePath, excelPath, lastOutDir string
+	ui := newWindowUI(w, version)
+	w.SetContent(ui.root)
+	w.ShowAndRun()
+}
 
-	templateLabel := widget.NewLabel("Ningún template seleccionado")
-	templateLabel.Wrapping = fyne.TextWrapWord
-	excelLabel := widget.NewLabel("Ningún Excel seleccionado")
-	excelLabel.Wrapping = fyne.TextWrapWord
+// windowUI holds every widget the handlers need. State lives here, not in
+// closures, so the three actions (validate, run, export) share it.
+type windowUI struct {
+	w       fyne.Window
+	version string
 
-	pickTemplateBtn := widget.NewButton("Elegir template (.txt)...", func() {
-		fd := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
-			if err != nil || reader == nil {
-				return
-			}
-			defer reader.Close()
-			templatePath = reader.URI().Path()
-			templateLabel.SetText(templatePath)
-		}, w)
-		fd.SetFilter(storage.NewExtensionFileFilter([]string{".txt"}))
-		fd.Show()
-	})
+	templatePath, excelPath, lastOutDir string
+	loaded                              *loadedInputs // set by validate(), nil until both files parse
 
-	pickExcelBtn := widget.NewButton("Elegir Excel (.xlsx)...", func() {
-		fd := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
-			if err != nil || reader == nil {
-				return
-			}
-			defer reader.Close()
-			excelPath = reader.URI().Path()
-			excelLabel.SetText(excelPath)
-		}, w)
-		fd.SetFilter(storage.NewExtensionFileFilter([]string{".xlsx"}))
-		fd.Show()
-	})
+	templateLabel, excelLabel, summaryLabel *widget.Label
+	dryRunCheck                            *widget.Check
+	runBtn, exportBtn, openOutputBtn       *widget.Button
+	progress                               *widget.ProgressBar
+	statusLabel                            *widget.Label
+	console                                *consoleView
 
-	dryRunCheck := widget.NewCheck("Dry-run (no conectar a los equipos, solo validar)", nil)
-	dryRunCheck.SetChecked(true)
+	root fyne.CanvasObject
+}
 
-	logEntry := widget.NewMultiLineEntry()
-	logEntry.Wrapping = fyne.TextWrapWord
-	logEntry.Disable() // read-only console-style output
-	logScroll := container.NewScroll(logEntry)
-	logScroll.SetMinSize(fyne.NewSize(680, 320))
+// loadedInputs is the parsed template + Excel, kept so Run/Export don't
+// re-read the files after validate() already reported on them.
+type loadedInputs struct {
+	tmpl    *template.Template
+	devices []excelsheet.Device
+}
 
-	appendLog := func(line string) {
-		fyne.Do(func() {
-			if logEntry.Text == "" {
-				logEntry.SetText(line)
-			} else {
-				logEntry.SetText(logEntry.Text + "\n" + line)
-			}
-			logEntry.CursorRow = strings.Count(logEntry.Text, "\n")
-			logEntry.Refresh()
+func newWindowUI(w fyne.Window, version string) *windowUI {
+	ui := &windowUI{w: w, version: version}
+
+	// ── Header ──
+	title := widget.NewLabelWithStyle("SmartConfigure", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	subtitle := widget.NewLabel("Ejecuta un template de comandos SSH sobre varios equipos definidos en un Excel.")
+	subtitle.Wrapping = fyne.TextWrapWord
+	header := container.NewVBox(title, subtitle)
+
+	// ── Files card ──
+	ui.templateLabel = pathLabel("Ningún template seleccionado")
+	ui.excelLabel = pathLabel("Ningún Excel seleccionado")
+	ui.summaryLabel = widget.NewLabel("")
+	ui.summaryLabel.Wrapping = fyne.TextWrapWord
+	ui.summaryLabel.TextStyle = fyne.TextStyle{Monospace: true}
+
+	pickTemplateBtn := widget.NewButtonWithIcon("Elegir template (.txt)…", theme.DocumentIcon(), func() {
+		ui.pickFile([]string{".txt"}, func(p string) {
+			ui.templatePath = p
+			ui.templateLabel.SetText(p)
+			ui.validate()
 		})
-	}
+	})
+	pickExcelBtn := widget.NewButtonWithIcon("Elegir Excel (.xlsx)…", theme.ListIcon(), func() {
+		ui.pickFile([]string{".xlsx"}, func(p string) {
+			ui.excelPath = p
+			ui.excelLabel.SetText(p)
+			ui.validate()
+		})
+	})
+	filesGrid := container.New(newFormLayout(),
+		pickTemplateBtn, ui.templateLabel,
+		pickExcelBtn, ui.excelLabel,
+	)
+	filesCard := widget.NewCard("Archivos", "", container.NewVBox(filesGrid, ui.summaryLabel))
 
-	openOutputBtn := widget.NewButton("📂 Abrir carpeta de resultados", func() {
-		if lastOutDir != "" {
-			openFolder(lastOutDir)
+	// ── Run card ──
+	ui.dryRunCheck = widget.NewCheck("Dry-run (no conectar a los equipos, solo validar)", nil)
+	ui.dryRunCheck.SetChecked(true)
+
+	ui.runBtn = widget.NewButtonWithIcon("Ejecutar", theme.MediaPlayIcon(), ui.run)
+	ui.runBtn.Importance = widget.HighImportance
+	ui.runBtn.Disable()
+
+	ui.exportBtn = widget.NewButtonWithIcon("Exportar script SecureCRT", theme.DownloadIcon(), ui.exportSecureCRT)
+	ui.exportBtn.Importance = widget.MediumImportance
+	ui.exportBtn.Disable()
+
+	ui.openOutputBtn = widget.NewButtonWithIcon("Abrir carpeta de resultados", theme.FolderOpenIcon(), func() {
+		if ui.lastOutDir != "" {
+			openFolder(ui.lastOutDir)
 		}
 	})
-	openOutputBtn.Disable()
+	ui.openOutputBtn.Importance = widget.LowImportance
+	ui.openOutputBtn.Disable()
 
-	var runBtn *widget.Button
-	runBtn = widget.NewButton("▶  Ejecutar", func() {
-		if templatePath == "" || excelPath == "" {
-			dialog.ShowInformation("Faltan archivos", "Elige primero un template y un Excel.", w)
+	actions := container.NewHBox(ui.runBtn, ui.exportBtn, ui.openOutputBtn)
+
+	ui.progress = widget.NewProgressBar()
+	ui.progress.Hide()
+	ui.statusLabel = widget.NewLabel("")
+	ui.statusLabel.Wrapping = fyne.TextWrapWord
+
+	runCard := widget.NewCard("Ejecución", "", container.NewVBox(ui.dryRunCheck, actions, ui.progress, ui.statusLabel))
+
+	// ── Console ──
+	ui.console = newConsoleView()
+	consoleTitle := widget.NewLabelWithStyle("Progreso", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+
+	top := container.NewVBox(header, filesCard, runCard, consoleTitle)
+	ui.root = container.NewPadded(container.NewBorder(top, nil, nil, nil, ui.console.scroll))
+	return ui
+}
+
+// pathLabel is a single-line label that truncates long paths with an
+// ellipsis instead of growing the window.
+func pathLabel(placeholder string) *widget.Label {
+	l := widget.NewLabel(placeholder)
+	l.Truncation = fyne.TextTruncateEllipsis
+	return l
+}
+
+// pickFile opens the native file dialog filtered to exts, starting in the
+// folder of the previously chosen file so the second pick is one click.
+func (ui *windowUI) pickFile(exts []string, onPick func(path string)) {
+	fd := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+		if err != nil || reader == nil {
 			return
 		}
-		runBtn.Disable()
-		openOutputBtn.Disable()
-		logEntry.SetText("")
+		defer reader.Close()
+		onPick(reader.URI().Path())
+	}, ui.w)
+	fd.SetFilter(storage.NewExtensionFileFilter(exts))
+	if start := firstNonEmpty(ui.excelPath, ui.templatePath); start != "" {
+		if lister, err := storage.ListerForURI(storage.NewFileURI(filepath.Dir(start))); err == nil {
+			fd.SetLocation(lister)
+		}
+	}
+	fd.Resize(fyne.NewSize(760, 520))
+	fd.Show()
+}
 
-		go func() {
-			defer fyne.Do(func() { runBtn.Enable() })
+// ─── Validate ──────────────────────────────────────────────────────────────
 
-			tmpl, err := template.Load(templatePath)
-			if err != nil {
-				appendLog("ERROR: no se pudo leer el template: " + err.Error())
-				return
-			}
-			devices, err := excelsheet.Load(excelPath, tmpl.Variables)
-			if err != nil {
-				appendLog("ERROR: no se pudo leer el Excel: " + err.Error())
-				return
-			}
-			if len(devices) == 0 {
-				appendLog("ERROR: el Excel no tiene ninguna fila de equipos.")
-				return
-			}
+// validate parses both files as soon as they are chosen and reports the
+// shape of the batch (or the first problem) before the user presses
+// anything. Run and Export are only enabled once both parse.
+func (ui *windowUI) validate() {
+	ui.loaded = nil
+	ui.runBtn.Disable()
+	ui.exportBtn.Disable()
+	if ui.templatePath == "" || ui.excelPath == "" {
+		ui.summaryLabel.SetText("")
+		return
+	}
 
-			outDir := filepath.Join(filepath.Dir(excelPath), "smartconfigure-output")
-			if err := os.MkdirAll(outDir, 0o755); err != nil {
-				appendLog("ERROR: no se pudo crear la carpeta de salida: " + err.Error())
-				return
-			}
-			lastOutDir = outDir
+	tmpl, err := template.Load(ui.templatePath)
+	if err != nil {
+		ui.setSummary("✗ Template: " + err.Error())
+		return
+	}
+	devices, err := excelsheet.Load(ui.excelPath, tmpl.Variables)
+	if err != nil {
+		ui.setSummary("✗ Excel: " + err.Error())
+		return
+	}
+	if len(devices) == 0 {
+		ui.setSummary("✗ El Excel no tiene ninguna fila de equipos.")
+		return
+	}
 
-			mode := "REAL (conectará a los equipos)"
-			if dryRunCheck.Checked {
-				mode = "DRY-RUN (no conecta a nada)"
-			}
-			appendLog(fmt.Sprintf("Modo: %s\n%d equipo(s), %d línea(s) de template\n", mode, len(devices), len(tmpl.Lines)))
+	ui.loaded = &loadedInputs{tmpl: tmpl, devices: devices}
+	ui.setSummary(fmt.Sprintf("✓ %d equipo(s) · %d línea(s) · %d variable(s): %s",
+		len(devices), len(tmpl.Lines), len(tmpl.Variables), strings.Join(tmpl.Variables, ", ")))
+	ui.runBtn.Enable()
+	ui.exportBtn.Enable()
+}
 
-			results, err := batch.Run(batch.Options{
-				Devices: devices,
-				Lines:   tmpl.Lines,
-				OutDir:  outDir,
-				DryRun:  dryRunCheck.Checked,
-				SSH: sshrunner.Config{
-					Port:           22,
-					ConnectTimeout: 10 * time.Second,
-					IdleTimeout:    800 * time.Millisecond,
-					LineTimeout:    15 * time.Second,
-				},
-				OnProgress: func(p batch.Progress) {
-					if p.Result.Success {
-						appendLog(fmt.Sprintf("[%d/%d] %s ... OK (%s)", p.Index, p.Total, p.Device, p.Result.Duration.Round(time.Millisecond)))
-					} else {
-						appendLog(fmt.Sprintf("[%d/%d] %s ... FAILED (%s): %s", p.Index, p.Total, p.Device, p.Result.Duration.Round(time.Millisecond), p.Result.Error))
-					}
-				},
-			})
-			if err != nil {
-				appendLog("ERROR: " + err.Error())
-				return
-			}
+func (ui *windowUI) setSummary(text string) {
+	ui.summaryLabel.SetText(text)
+}
 
-			ok := 0
-			for _, r := range results {
-				if r.Success {
-					ok++
+// outDir is always next to the Excel, for runs and exports alike.
+func (ui *windowUI) outDir() (string, error) {
+	dir := filepath.Join(filepath.Dir(ui.excelPath), "smartconfigure-output")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("no se pudo crear la carpeta de salida: %w", err)
+	}
+	ui.lastOutDir = dir
+	return dir, nil
+}
+
+// ─── Run ───────────────────────────────────────────────────────────────────
+
+func (ui *windowUI) run() {
+	if ui.loaded == nil {
+		dialog.ShowInformation("Faltan archivos", "Elige primero un template y un Excel válidos.", ui.w)
+		return
+	}
+	in := ui.loaded
+	dryRun := ui.dryRunCheck.Checked
+
+	ui.setBusy(true)
+	ui.console.Clear()
+	ui.progress.SetValue(0)
+	ui.progress.Show()
+
+	go func() {
+		defer fyne.Do(func() { ui.setBusy(false) })
+
+		outDir, err := ui.outDir()
+		if err != nil {
+			ui.console.Append("ERROR: " + err.Error())
+			return
+		}
+
+		mode := "REAL (conectará a los equipos)"
+		if dryRun {
+			mode = "DRY-RUN (no conecta a nada)"
+		}
+		ui.console.Append(fmt.Sprintf("Modo: %s", mode))
+		ui.console.Append(fmt.Sprintf("%d equipo(s), %d línea(s) de template", len(in.devices), len(in.tmpl.Lines)))
+		ui.console.Append("")
+		ui.setStatus(fmt.Sprintf("Ejecutando 0/%d…", len(in.devices)))
+
+		total := len(in.devices)
+		results, err := batch.Run(batch.Options{
+			Devices: in.devices,
+			Lines:   in.tmpl.Lines,
+			OutDir:  outDir,
+			DryRun:  dryRun,
+			SSH:     defaultSSH,
+			OnProgress: func(p batch.Progress) {
+				dur := p.Result.Duration.Round(time.Millisecond)
+				if p.Result.Success {
+					ui.console.Append(fmt.Sprintf("[%d/%d] %s ... OK (%s)", p.Index, p.Total, p.Device, dur))
+				} else {
+					ui.console.Append(fmt.Sprintf("[%d/%d] %s ... FAILED (%s): %s", p.Index, p.Total, p.Device, dur, p.Result.Error))
 				}
+				fyne.Do(func() { ui.progress.SetValue(float64(p.Index) / float64(total)) })
+				ui.setStatus(fmt.Sprintf("Ejecutando %d/%d…", p.Index, total))
+			},
+		})
+		if err != nil {
+			ui.console.Append("ERROR: " + err.Error())
+			return
+		}
+
+		ok := 0
+		for _, r := range results {
+			if r.Success {
+				ok++
 			}
-			appendLog(fmt.Sprintf("\nHecho: %d/%d correctos.\nLogs y report.csv guardados en:\n%s", ok, len(results), outDir))
-			fyne.Do(func() { openOutputBtn.Enable() })
-		}()
-	})
+		}
+		ui.console.Append("")
+		ui.console.Append(fmt.Sprintf("Hecho: %d/%d correctos.", ok, len(results)))
+		ui.console.Append("Logs y report.csv guardados en:")
+		ui.console.Append(outDir)
 
-	content := container.NewVBox(
-		widget.NewLabelWithStyle("SmartConfigure", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewLabel("Ejecuta un template de comandos SSH sobre varios equipos definidos en un Excel."),
-		widget.NewSeparator(),
-		pickTemplateBtn, templateLabel,
-		pickExcelBtn, excelLabel,
-		dryRunCheck,
-		container.NewGridWithColumns(2, runBtn, openOutputBtn),
-		widget.NewSeparator(),
-		widget.NewLabel("Progreso:"),
-		logScroll,
-	)
+		summary := fmt.Sprintf("Hecho: %d OK, %d fallidos.", ok, len(results)-ok)
+		if dryRun {
+			summary = fmt.Sprintf("Dry-run terminado: %d OK, %d con variables sin valor.", ok, len(results)-ok)
+		}
+		ui.setStatus(summary)
+		fyne.Do(func() { ui.openOutputBtn.Enable() })
+	}()
+}
 
-	w.SetContent(container.NewPadded(content))
-	w.ShowAndRun()
+// ─── Export ────────────────────────────────────────────────────────────────
+
+// exportSecureCRT writes the SecureCRT scripts for the loaded batch. Pure
+// file output: it never connects, so it is allowed with Dry-run ticked.
+func (ui *windowUI) exportSecureCRT() {
+	if ui.loaded == nil {
+		dialog.ShowInformation("Faltan archivos", "Elige primero un template y un Excel válidos.", ui.w)
+		return
+	}
+	in := ui.loaded
+
+	ui.setBusy(true)
+	ui.console.Clear()
+	ui.progress.Hide()
+
+	go func() {
+		defer fyne.Do(func() { ui.setBusy(false) })
+
+		rendered, err := securecrt.Build(in.devices, in.tmpl.Lines)
+		if err != nil {
+			ui.console.Append("ERROR: " + err.Error())
+			ui.setStatus("No se ha exportado nada: revisa el Excel.")
+			return
+		}
+		outDir, err := ui.outDir()
+		if err != nil {
+			ui.console.Append("ERROR: " + err.Error())
+			return
+		}
+		paths, err := securecrt.Write(securecrt.Batch{
+			Version:      ui.version,
+			GeneratedAt:  time.Now(),
+			TemplatePath: ui.templatePath,
+			ExcelPath:    ui.excelPath,
+			Port:         defaultSSH.Port,
+			IdleTimeout:  defaultSSH.IdleTimeout,
+			LineTimeout:  defaultSSH.LineTimeout,
+			Devices:      rendered,
+		}, outDir)
+		if err != nil {
+			ui.console.Append("ERROR: no se pudo escribir el script: " + err.Error())
+			return
+		}
+
+		ui.console.Append(fmt.Sprintf("Script SecureCRT generado para %d equipo(s):", len(rendered)))
+		for _, p := range paths {
+			ui.console.Append("  " + p)
+		}
+		ui.console.Append("")
+		ui.console.Append("Cómo usarlo: abre SecureCRT → Script → Run… → elige el .vbs (Windows) o el .py.")
+		ui.console.Append("El script conecta a cada equipo, envía el template y deja un <IP>.securecrt.log junto al script.")
+		ui.console.Append("")
+		ui.console.Append("AVISO: el script contiene los usuarios y contraseñas del Excel. No lo compartas ni lo subas a ningún sitio.")
+		ui.setStatus(fmt.Sprintf("Script exportado (%d equipos). SmartConfigure no ha conectado a nada.", len(rendered)))
+		fyne.Do(func() { ui.openOutputBtn.Enable() })
+	}()
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+func (ui *windowUI) setBusy(busy bool) {
+	if busy {
+		ui.runBtn.Disable()
+		ui.exportBtn.Disable()
+		ui.openOutputBtn.Disable()
+		return
+	}
+	if ui.loaded != nil {
+		ui.runBtn.Enable()
+		ui.exportBtn.Enable()
+	}
+}
+
+// setStatus is safe to call from any goroutine.
+func (ui *windowUI) setStatus(text string) {
+	fyne.Do(func() { ui.statusLabel.SetText(text) })
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // openFolder opens path in the OS's default file manager. Best-effort:
 // errors are ignored since this is just a convenience shortcut, not a
-// core feature — the output folder path is always shown in the log too.
+// core feature — the output folder path is always shown in the console too.
 func openFolder(path string) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
@@ -200,4 +441,102 @@ func openFolder(path string) {
 		cmd = exec.Command("xdg-open", path)
 	}
 	_ = cmd.Start()
+}
+
+// ─── Console ───────────────────────────────────────────────────────────────
+
+// consoleView is the read-only, monospace progress log. A TextGrid rather
+// than a disabled Entry: it is not greyed out, it is genuinely
+// monospaced, and single rows can be coloured (OK green, FAILED/ERROR
+// red) without touching the rest of the text.
+type consoleView struct {
+	grid   *widget.TextGrid
+	scroll *container.Scroll
+	lines  []string
+}
+
+func newConsoleView() *consoleView {
+	c := &consoleView{grid: widget.NewTextGrid()}
+	c.scroll = container.NewScroll(c.grid)
+	c.scroll.SetMinSize(fyne.NewSize(0, 200))
+	return c
+}
+
+// Append adds one line and repaints; safe to call from any goroutine.
+func (c *consoleView) Append(line string) {
+	fyne.Do(func() {
+		c.lines = append(c.lines, line)
+		c.grid.SetText(strings.Join(c.lines, "\n"))
+		c.styleRows()
+		c.grid.Refresh()
+		c.scroll.ScrollToBottom()
+	})
+}
+
+func (c *consoleView) Clear() {
+	c.lines = nil
+	c.grid.SetText("")
+	c.grid.Refresh()
+}
+
+// styleRows colours outcome lines. Colour is reinforcement only: the
+// words OK / FAILED / ERROR are always there (MASTER.md §2, "status is words").
+func (c *consoleView) styleRows() {
+	okStyle := &widget.CustomTextGridStyle{FGColor: theme.Color(theme.ColorNameSuccess)}
+	failStyle := &widget.CustomTextGridStyle{FGColor: theme.Color(theme.ColorNameError)}
+	for i, l := range c.lines {
+		switch {
+		case strings.Contains(l, "... OK ("):
+			c.grid.SetRowStyle(i, okStyle)
+		case strings.Contains(l, "... FAILED (") || strings.HasPrefix(l, "ERROR:") || strings.HasPrefix(l, "AVISO:"):
+			c.grid.SetRowStyle(i, failStyle)
+		}
+	}
+}
+
+// ─── Form layout ───────────────────────────────────────────────────────────
+
+// formLayout lays out (button, label) pairs in two columns: the buttons
+// take their natural width, the labels take the rest. Fyne's GridWithColumns
+// would split 50/50 and waste half the row on the button.
+type formLayout struct{}
+
+func newFormLayout() fyne.Layout { return &formLayout{} }
+
+func (f *formLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var left, height float32
+	for i := 0; i+1 < len(objects); i += 2 {
+		bs, ls := objects[i].MinSize(), objects[i+1].MinSize()
+		if bs.Width > left {
+			left = bs.Width
+		}
+		row := bs.Height
+		if ls.Height > row {
+			row = ls.Height
+		}
+		height += row + theme.Padding()
+	}
+	return fyne.NewSize(left+theme.Padding()+120, height)
+}
+
+func (f *formLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	var left float32
+	for i := 0; i < len(objects); i += 2 {
+		if w := objects[i].MinSize().Width; w > left {
+			left = w
+		}
+	}
+	var y float32
+	for i := 0; i+1 < len(objects); i += 2 {
+		btn, lbl := objects[i], objects[i+1]
+		row := btn.MinSize().Height
+		if h := lbl.MinSize().Height; h > row {
+			row = h
+		}
+		btn.Resize(fyne.NewSize(left, row))
+		btn.Move(fyne.NewPos(0, y))
+		lbl.Resize(fyne.NewSize(size.Width-left-theme.Padding(), row))
+		lbl.Move(fyne.NewPos(left+theme.Padding(), y))
+		y += row + theme.Padding()
+	}
 }
