@@ -19,9 +19,9 @@ may touch the devices.
 │ SmartConfigure (bold)                                                   │
 │ Ejecuta un template de comandos SSH sobre varios equipos …              │
 │ ┌ Archivos ───────────────────────────────────────────────────────────┐ │
-│ │ [📄 Elegir template (.txt)…]  C:\…\template.txt                     │ │
-│ │ [☰ Elegir Excel (.xlsx)…]     C:\…\equipos.xlsx                      │ │
-│ │ ✓ 12 equipo(s) · 44 línea(s) · 5 variable(s): SWITCH_NAME, …  (mono) │ │
+│ │ [📄 Elegir template (.txt)…]  template.txt — C:\…\lote-sept          │ │
+│ │ [☰ Elegir Excel (.xlsx)…]     equipos.xlsx — C:\…\lote-sept          │ │
+│ │ ✓ 12 equipo(s) · 44 línea(s) · 5 variable(s): SWITCH_NAME, …         │ │
 │ └─────────────────────────────────────────────────────────────────────┘ │
 │ ┌ Ejecución ──────────────────────────────────────────────────────────┐ │
 │ │ ☑ Dry-run (no conectar a los equipos, solo validar)                 │ │
@@ -146,9 +146,21 @@ crt.Session.Disconnect
   `MediumImportance`, Open folder `LowImportance`. Every button has an icon
   from Fyne's theme set — no emoji in labels.
 - **Validate on pick, not on Run.** As soon as both files are chosen the
-  window parses them and shows `✓ N equipo(s) · N línea(s) · N variable(s)`
-  in mono, or `✗ Template: …` / `✗ Excel: …` with the loader's own error.
-  Run and Export stay disabled until it passes.
+  window parses them and shows `✓ N equipo(s) · N línea(s) · N variable(s)`,
+  or `✗ Template: …` / `✗ Excel: …` with the loader's own error. Run and
+  Export stay disabled until it passes. The summary is in the regular face,
+  not mono: Fyne's bundled monospace clips underscores in labels, and
+  variable names are full of them (the console TextGrid is unaffected).
+- **File labels read `name — folder`** so ellipsis truncation eats the
+  folder tail, never the file name.
+- **An empty Excel cell is an unresolved variable** (`template.Render`
+  keeps the placeholder for `""`), so dry-run, run and export all flag it
+  with the same *line N has a variable with no value* message.
+- **Tests**: `internal/gui/gui_test.go` drives validate/run/export through
+  Fyne's test driver (`test.NewApp()`), no display needed; set
+  `SC_GUI_CAPTURE=<png>` to save a software-rendered capture. The GL
+  driver cannot run under `go test`; for a real-window look, build and
+  launch the binary.
 - **Progress bar + status line** during a run (`Ejecutando 6/12…`), then a
   one-line summary (`Hecho: 10 OK, 2 fallidos.`; dry-run says *con
   variables sin valor* instead of *fallidos*).
