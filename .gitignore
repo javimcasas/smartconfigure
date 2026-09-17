@@ -2,8 +2,9 @@
 /smartconfigure-output/
 *.log
 .DS_Store
-smartconfigure
-smartconfigure.exe
+# compiled binary (root only — design-system/smartconfigure/ must stay tracked)
+/smartconfigure
+/smartconfigure.exe
 
 # wrangler files
 .wrangler

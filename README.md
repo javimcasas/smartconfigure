@@ -115,6 +115,20 @@ cambia nunca de URL:
 https://github.com/javimcasas/smartconfigure/releases/latest/download/smartconfigure-windows-amd64.exe
 ```
 
+## Landing web y visor de logs
+
+La carpeta `landing/` es la página estática que Cloudflare sirve en
+`https://smartconfigure.hubsmartmatrix.com` (solo assets, sin Worker ni
+SSO): descargas, formato de entrada, flags, y un **visor de logs**
+(`logs.html`) que parsea en el navegador los `.log` y `report.csv` de una
+ejecución sin subir nada.
+
+El diseño (tokens, componentes, reglas por superficie, incluida la ventana
+Fyne) está documentado en `design-system/smartconfigure/` — leer
+`MASTER.md` antes de tocar cualquier UI. Las URLs de descarga de
+`landing/index.html` deben coincidir con los nombres de asset que genera
+`.github/workflows/release.yml`.
+
 ## Seguridad
 
 Las contraseñas del Excel se leen solo en memoria durante la ejecución y no
