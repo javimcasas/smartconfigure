@@ -1,7 +1,7 @@
 /* ───────────────────────────────────────────────────────────────────────────
    SmartConfigure — "Field Manual"
    Source of truth for tokens: design-system/smartconfigure/MASTER.md §2–§4.
-   Minimalism & Swiss: flat surfaces, 1px rules, one signal-yellow accent.
+   Minimalism & Swiss: flat surfaces, 1px rules, one signal-blue accent.
    ─────────────────────────────────────────────────────────────────────────── */
 
 /* ─── Tokens ─────────────────────────────────────────────────────────────── */
@@ -13,11 +13,11 @@
   --field-border: #7A8598;
   --text: #111827;
   --text-muted: #4B5563;
-  --primary: #B47509;
-  --primary-hover: #CA8A04;
-  --primary-ink: #854D0E;
-  --on-primary: #111827;
-  --primary-tint: #FEF3C7;
+  --primary: #1D4ED8;
+  --primary-hover: #1E40AF;
+  --primary-ink: #1D4ED8;
+  --on-primary: #FFFFFF;
+  --primary-tint: #DBEAFE;
   --success-bg: #E7F6EE;
   --success-text: #0F7A46;
   --danger-bg: #FDECEC;
@@ -48,11 +48,11 @@
   --field-border: #6B7486;
   --text: #E8EAF0;
   --text-muted: #9AA3B5;
-  --primary: #FACC15;
-  --primary-hover: #FDE047;
-  --primary-ink: #FDE047;
-  --on-primary: #1C1400;
-  --primary-tint: #332A0C;
+  --primary: #60A5FA;
+  --primary-hover: #93C5FD;
+  --primary-ink: #93C5FD;
+  --on-primary: #0B1A33;
+  --primary-tint: #1B2A4A;
   --success-bg: #0E2A1C;
   --success-text: #3DD68C;
   --danger-bg: #2C1417;

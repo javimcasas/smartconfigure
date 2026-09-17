@@ -21,7 +21,7 @@ the device answered, where it stopped. Everything is parsed in the browser
 │  Drop the .log files SmartConfigure wrote (and report.csv) …               │  lead
 │                                                                            │
 │  ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐        │  .dropzone (dashed)
-│  │   [↑]  Drag .log / .csv files here          [Choose files]     │        │   (is-over → yellow)
+│  │   [↑]  Drag .log / .csv files here          [Choose files]     │        │   (is-over → accent)
 │  └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘        │
 │                                                                            │
 │  ┌ 12 devices │ 10 OK │ 2 FAILED │ 1m 42s total ┐    [Clear]               │  .run-strip (aria-live)

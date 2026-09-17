@@ -10,7 +10,8 @@ network engineering desktop tool landing page download binaries SSH bulk
 configuration log viewer"*, `--variance 3 --motion 2 --density 6`), then
 adapted by hand: the skill's pattern match ("event landing", countdowns) was
 discarded, its style match (Minimalism & Swiss) kept, its palette replaced
-by the ecosystem colour map below.
+by the tokens below (blue was the user's explicit choice over the first
+signal-yellow draft).
 
 ---
 
@@ -64,9 +65,9 @@ Consequences that outrank everything else:
    people can copy the shape. Never paraphrase a format.
 3. **Nothing is uploaded.** The Log Viewer parses locally; the landing says
    so. The download page must never look like a SaaS sign-up.
-4. **Some environments only allow a jump host / remote desktop.** The
-   planned *Export SecureRDP script* button (see `pages/desktop.md`) exists
-   for those; the web copy should not promise it until it ships.
+4. **Some workstations may only touch the devices through SecureCRT.**
+   The planned *Export SecureCRT script* button (see `pages/desktop.md`)
+   exists for those; the web copy should not promise it until it ships.
 
 It is a technical datasheet, not a marketing site: no testimonials, no
 countdowns, no pricing, no hero illustration.
@@ -116,10 +117,10 @@ read once; the Log Viewer is denser (see its page file: 36px rows).
 
 ### Signature moves
 
-1. **Yellow means "live".** One accent. It is spent on: the primary button,
+1. **Blue means "live".** One accent. It is spent on: the primary button,
    the brand tile, focus rings, the active nav/filter, the *live* badge on
    the desktop Run button. It is **never** a background wash, never
-   decorative, never a heading colour. The message: yellow is the thing that
+   decorative, never a heading colour. The message: blue is the thing that
    touches a real switch.
 2. **Mono means literal.** Template text, `{VARIABLE}` names, Excel column
    headers, file names, CLI flags, log transcripts, IPs, durations — all in
@@ -140,9 +141,13 @@ read once; the Log Viewer is denser (see its page file: 36px rows).
 
 - **Event / marketing landing patterns** (skill default: countdown, social
   proof, sticky register CTA). This is an internal tool with one download.
-- **Navy + gold** (skill palette). Navy collides with the hub's indigo and
-  OceanStor's blue side by side; gold-as-brown collides with SmartFinance's
-  brass.
+- **Navy + gold** (skill palette): navy `#1E3A5F` is too dark to double as
+  a fill and an ink; gold-as-brown collides with SmartFinance's brass.
+- **Signal yellow** (first draft, `#B47509` / `#FACC15`). Rejected by the
+  user in favour of blue. The blue chosen (`#1D4ED8`, blue-700) is
+  deliberately bluer and deeper than the hub's indigo `#4f46e5` and
+  OceanStor's sky `#0369a1` so the three still read differently side by
+  side; do not drift it towards either.
 - **Ink as the action colour.** SmartFinance owns it ("Ledger").
 - **OS logos** (Windows flag, Apple, Tux): brand-usage headaches, and they
   date. Text tags instead.
@@ -170,11 +175,11 @@ JS. Add a token here first. Every token exists in **both** themes.
 | **Control boundary** (inputs, secondary buttons) | `--field-border` | `#7A8598` |
 | Text | `--text` | `#111827` |
 | Text muted | `--text-muted` | `#4B5563` |
-| **Accent fill** (primary button, brand tile, focus ring) | `--primary` | `#B47509` |
-| Accent fill hover | `--primary-hover` | `#CA8A04` |
-| **Accent as text / icon** (links, active nav) | `--primary-ink` | `#854D0E` |
-| Text on accent fill | `--on-primary` | `#111827` |
-| Accent tint (active filter, brand tile bg, drop veil) | `--primary-tint` | `#FEF3C7` |
+| **Accent fill** (primary button, brand tile, focus ring) | `--primary` | `#1D4ED8` |
+| Accent fill hover | `--primary-hover` | `#1E40AF` |
+| **Accent as text / icon** (links, active nav) | `--primary-ink` | `#1D4ED8` |
+| Text on accent fill | `--on-primary` | `#FFFFFF` |
+| Accent tint (active filter, brand tile bg, drop veil) | `--primary-tint` | `#DBEAFE` |
 | Success bg / text | `--success-bg` `--success-text` | `#E7F6EE` `#0F7A46` |
 | Danger bg / text | `--danger-bg` `--danger-text` | `#FDECEC` `#B91C1C` |
 | Neutral badge bg / text (dry-run, incomplete) | `--neutral-bg` `--neutral-text` | `#EEF0F4` `#4B5563` |
@@ -191,11 +196,11 @@ JS. Add a token here first. Every token exists in **both** themes.
 | Control boundary | `--field-border` | `#6B7486` |
 | Text | `--text` | `#E8EAF0` |
 | Text muted | `--text-muted` | `#9AA3B5` |
-| Accent fill | `--primary` | `#FACC15` |
-| Accent fill hover | `--primary-hover` | `#FDE047` |
-| Accent as text | `--primary-ink` | `#FDE047` |
-| Text on accent fill | `--on-primary` | `#1C1400` |
-| Accent tint | `--primary-tint` | `#332A0C` |
+| Accent fill | `--primary` | `#60A5FA` |
+| Accent fill hover | `--primary-hover` | `#93C5FD` |
+| Accent as text | `--primary-ink` | `#93C5FD` |
+| Text on accent fill | `--on-primary` | `#0B1A33` |
+| Accent tint | `--primary-tint` | `#1B2A4A` |
 | Success bg / text | | `#0E2A1C` `#3DD68C` |
 | Danger bg / text | | `#2C1417` `#F58080` |
 | Neutral badge bg / text | | `#1F232D` `#9AA3B5` |
@@ -206,10 +211,10 @@ The hub's app switcher (`switcher.js`) reads `--surface/--text/--text-muted/
 
 ### The two-token accent rule
 
-`--primary` is a **fill** (always paired with `--on-primary`, which is dark
-in both themes — yellow needs dark text). `--primary-ink` is **text** on a
-surface. They are different values in both themes. Call sites must use the
-right one; `--primary` as a text colour fails contrast in light mode.
+`--primary` is a **fill**, always paired with `--on-primary` (white in
+light, near-black in dark — a light-blue fill needs dark text).
+`--primary-ink` is **text** on a surface. Equal in light, different in dark
+(`#60A5FA` fill vs `#93C5FD` ink). Call sites must use the right one.
 
 ### Verified contrast (measured, both themes)
 
@@ -219,26 +224,23 @@ right one; `--primary` as a text colour fails contrast in light mode.
 | `--text` on `--surface-2` | 15.55 | 13.06 |
 | `--text-muted` on `--surface` | 7.56 | 6.86 |
 | `--text-muted` on `--surface-2` | 6.62 | 6.20 |
-| `--primary-ink` on `--surface` | 6.85 | 13.19 |
-| `--primary-ink` on `--primary-tint` | 6.15 | 9.97 |
-| `--on-primary` on `--primary` | 4.64 | 11.93 |
-| `--on-primary` on `--primary-hover` | 6.04 | 13.86 |
+| `--primary-ink` on `--surface` | 6.70 | 9.65 |
+| `--primary-ink` on `--primary-tint` | 5.49 | 7.89 |
+| `--on-primary` on `--primary` | 6.70 | 6.83 |
+| `--on-primary` on `--primary-hover` | 8.72 | 9.63 |
 | `--success-text` on `--success-bg` | 4.83 | 8.19 |
 | `--danger-text` on `--danger-bg` | 5.66 | 6.79 |
 | `--neutral-text` on `--neutral-bg` | 6.62 | 6.20 |
-| `--primary` fill vs `--surface` (non-text, 3:1) | 3.60 | 11.36 |
+| `--primary` fill vs `--surface` (non-text, 3:1) | 6.70 | 6.84 |
 | `--field-border` vs `--surface-2` (non-text, 3:1) | 3.27 | 3.34 |
 
-**Tightest pairs:** `--on-primary`/`--primary` light (4.64) and
-`--primary` fill vs white (3.60). Do not lighten the light-mode fill:
-`#CA8A04` is the hover, and it already drops to 2.94 against white — it is
-acceptable as a *hover* state only because the resting state establishes
-the boundary. Re-measure any new pair before shipping (script: WCAG
-relative luminance).
+**Tightest pairs:** `--success-text`/`--success-bg` light (4.83) and
+`--field-border`/`--surface-2` light (3.27). Do not lighten either.
+Re-measure any new pair before shipping (script: WCAG relative luminance).
 
 ### Semantic colour discipline
 
-- **Yellow = the action / the current thing / live.** Primary button, active
+- **Blue = the action / the current thing / live.** Primary button, active
   nav link, active filter chip, focus ring, brand tile. Nothing else.
 - **Green = a device really succeeded** (`OK`, `SUCCESS`). Never for a dry
   run.
@@ -246,9 +248,9 @@ relative luminance).
   always with the word.
 - **Neutral grey = informational status** (`DRY-RUN OK`, `INCOMPLETE`,
   version badge).
-- There is **no amber warning tier** on the web: amber would read as the
-  accent. If a warning state is ever needed, it is a neutral badge with the
-  word *Warning*.
+- There is **no amber warning tier** on the web: a third hue would compete
+  with the accent. If a warning state is ever needed, it is a neutral badge
+  with the word *Warning*.
 
 ---
 
@@ -314,7 +316,7 @@ zoom on focus.
 
 | Component | Class | Notes |
 |-----------|-------|-------|
-| Topbar | `.topbar` | brand tile (yellow square, glyph) + wordmark; `.topbar-nav` anchors; `.topbar-actions` |
+| Topbar | `.topbar` | brand tile (accent square, glyph) + wordmark; `.topbar-nav` anchors; `.topbar-actions` |
 | Brand tile | `.brand-mark` | 32×32, `--primary` fill, `--on-primary` glyph (the three-node network glyph from `hub-icons.js`) |
 | Eyebrow | `.eyebrow` | 12px uppercase, `letter-spacing: .06em`, muted |
 | Buttons | `.btn` + `.btn-primary` / `.btn-secondary` / `.btn-ghost`, `.btn-sm` | 40px min height (32 sm); primary is the only filled one; secondary has `--field-border`; ghost has no border |
@@ -324,7 +326,7 @@ zoom on focus.
 | Section | `section.block` + `h2` | 64px apart; `h2` has an anchor `id` used by the topbar nav |
 | Steps | `ol.steps > li` | numbered with a 28px circle (`--surface-2`, mono digit); title bold, body muted |
 | Spec table | `table.spec-table` in `.table-wrap` | 12px uppercase headers, 16px cells, mono where literal; zebra-less; 1px rules |
-| Download table | `table.downloads` | rows: OS tag (`.os-tag`, mono) · platform · file (mono) · note · `.btn-secondary`; the row matching the visitor's OS gets `.is-current` (yellow left rule) |
+| Download table | `table.downloads` | rows: OS tag (`.os-tag`, mono) · platform · file (mono) · note · `.btn-secondary`; the row matching the visitor's OS gets `.is-current` (accent left rule) |
 | Code block | `pre > code` | `--surface-2`, 13.5px mono, 16px padding, `overflow-x: auto`, `tab-size: 2` |
 | Note | `.note` | `--surface` + 1px border + 3px **left** rule in `--primary`; used once per page at most (the safety note) |
 | Outputs trio | `.outputs` | 3-up grid of `.output` (icon 20px stroke 1.8, h3, one sentence); 1-up on mobile |
@@ -364,12 +366,13 @@ Decorative icons next to text carry `aria-hidden="true"`.
 
 - Download URLs that do not match `release.yml` asset names. When the
   workflow changes an asset name, change `index.html` in the same commit.
-- Showing a feature on the landing before it ships (SecureRDP export).
+- Showing a feature on the landing before it ships (SecureCRT export).
 - Rendering a template or column name in the UI face, or wrapping a
   template line.
 - Colouring a dry run green.
-- A second accent hue, an amber "warning" tier, gradients, glass, resting
-  shadows, OS logos, emoji.
+- A second accent hue (including an amber "warning" tier), gradients,
+  glass, resting shadows, OS logos, emoji.
+- Nudging the blue towards the hub's indigo or OceanStor's sky.
 - Rewriting the log parser's structure without changing
   `sshrunner.go` in the same commit (they are one format).
 - Adding a Worker or SSO gate: the landing is deliberately public and

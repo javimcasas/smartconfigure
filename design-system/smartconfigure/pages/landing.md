@@ -29,7 +29,7 @@ SmartMatrix); the page does not need to sell anything.
 │  Opens an SSH session per row, substitutes {VARIABLE}s, keeps a transcript…     │  lead (muted, 68ch)
 │  [⬇ Download for Windows]  [All downloads]      v0.1.0 · 31 Aug 2026            │  primary + secondary + version tag
 │                                                                                 │
-│  ┃ Safe by default. Dry-run is on when the app opens: …                         │  .note (single yellow left rule)
+│  ┃ Safe by default. Dry-run is on when the app opens: …                         │  .note (single accent left rule)
 │                                                                                 │
 │  ── Downloads ──────────────────────────────────────────────────────────────    │  h2#downloads
 │  win  Windows x64        smartconfigure-windows-amd64.zip   unzip, run   [Get]  │  table.downloads
@@ -99,7 +99,7 @@ flags table keeps its `.table-wrap` scroll (it is literal text).
   `--excel`, `--out`, `--dry-run`, `--port`, `--connect-timeout`,
   `--idle-timeout`, `--line-timeout`, `--version` with their defaults.
   Defaults are mono.
-- **No feature that has not shipped.** SecureRDP export goes on this page
+- **No feature that has not shipped.** SecureCRT export goes on this page
   only when the binary that has it is on Releases.
 - **Security line** (footer or Format section): logs contain what was sent,
   including passwords if the template sends them; treat

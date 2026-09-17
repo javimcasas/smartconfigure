@@ -11,32 +11,31 @@ the Fyne desktop window.
 | [`MASTER.md`](./MASTER.md) | Global source of truth — chosen style, colour/type/spacing tokens, components, a11y floor, anti-patterns. **Always read first.** |
 | [`pages/landing.md`](./pages/landing.md) | `landing/index.html` — downloads, how it works, input format, CLI flags |
 | [`pages/logs.md`](./pages/logs.md) | `landing/logs.html` — browser-side viewer for `*.log` + `report.csv` |
-| [`pages/desktop.md`](./pages/desktop.md) | `internal/gui/gui.go` — the Fyne window, and the contract for the planned *Export SecureRDP script* button |
+| [`pages/desktop.md`](./pages/desktop.md) | `internal/gui/gui.go` — the Fyne window, and the contract for the planned *Export SecureCRT script* button |
 
 Page files **override** `MASTER.md` on conflict.
 
 ## Chosen style (summary)
 
 **"Field Manual"** = **Minimalism & Swiss Style** (flat panels, 1px rules,
-numbered steps, spec tables, one primary action) + one **signal-yellow**
-accent (`#B47509` fill / `#854D0E` ink light · `#FACC15` fill / `#FDE047`
-ink dark) that is spent only on the live/primary action.
+numbered steps, spec tables, one primary action) + one **signal-blue**
+accent (`#1D4ED8` fill/ink light · `#60A5FA` fill / `#93C5FD` ink dark)
+that is spent only on the live/primary action.
 
 Typography is a two-role split: **Manrope** for UI chrome, **JetBrains
 Mono** for anything that is literally a template, a column name, a flag, a
 file name or a transcript. Shared with HyperParse on purpose: console text
 looks the same across the tools that touch consoles.
 
-Why yellow: every other hue is taken by a sibling app (hub indigo, OceanStor
-blue, SmartProject teal, SmartNutrition green, SmartQuiz violet,
-HyperTraining orange, HyperText vermilion, SmartFinance ink + brass,
-HyperParse magenta), and yellow is the caution colour — this is the tool
-that touches production switches, and its whole ethos is *dry-run first*.
-Rationale and rejected alternatives in `MASTER.md` §1.
+Why this blue: the user's explicit preference (a signal-yellow draft was
+rejected). It is a deep blue-700, kept deliberately apart from the hub's
+indigo (`#4f46e5`) and OceanStor's sky (`#0369a1`) so the three still read
+differently side by side. Rationale and rejected alternatives in
+`MASTER.md` §1.
 
 ## The one rule to remember
 
-**Yellow means live, mono means literal.** The accent goes on the thing
+**Blue means live, mono means literal.** The accent goes on the thing
 that does something real; anything a user will paste into a file or read
 back from a device is set in mono, unwrapped, unformatted.
 
