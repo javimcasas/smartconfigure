@@ -13,6 +13,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/storage"
@@ -96,11 +97,11 @@ type windowUI struct {
 	loaded                              *loadedInputs // set by validate(), nil until both files parse
 
 	templateLabel, excelLabel, summaryLabel *widget.Label
-	dryRunCheck                            *widget.Check
-	runBtn, exportBtn, openOutputBtn       *widget.Button
-	progress                               *widget.ProgressBar
-	statusLabel                            *widget.Label
-	console                                *consoleView
+	dryRunCheck                             *widget.Check
+	runBtn, exportBtn, openOutputBtn        *widget.Button
+	progress                                *widget.ProgressBar
+	statusLabel                             *widget.Label
+	console                                 *consoleView
 
 	root fyne.CanvasObject
 }
@@ -115,30 +116,36 @@ type loadedInputs struct {
 func newWindowUI(w fyne.Window, version string) *windowUI {
 	ui := &windowUI{w: w, version: version}
 
-	// ── Header ──
-	title := widget.NewLabelWithStyle("SmartConfigure", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	// ── Header ── brand mark + name at 20px, like the web topbar.
+	mark := canvas.NewImageFromResource(fyne.NewStaticResource("smartconfigure.svg", iconSVG))
+	mark.FillMode = canvas.ImageFillContain
+	mark.SetMinSize(fyne.NewSize(28, 28))
+	title := canvas.NewText("SmartConfigure", theme.Color(theme.ColorNameForeground))
+	title.TextSize = 20
+	title.TextStyle = fyne.TextStyle{Bold: true}
 	subtitle := widget.NewLabel("Ejecuta un template de comandos SSH sobre varios equipos definidos en un Excel.")
 	subtitle.Wrapping = fyne.TextWrapWord
-	header := container.NewVBox(title, subtitle)
+	header := container.NewVBox(container.NewHBox(mark, container.NewCenter(title)), subtitle)
 
 	// ── Files card ──
 	ui.templateLabel = pathLabel("Ningún template seleccionado")
 	ui.excelLabel = pathLabel("Ningún Excel seleccionado")
+	// Regular face on purpose: Fyne's bundled monospace clips underscores
+	// in labels, and variable names are full of them.
 	ui.summaryLabel = widget.NewLabel("")
 	ui.summaryLabel.Wrapping = fyne.TextWrapWord
-	ui.summaryLabel.TextStyle = fyne.TextStyle{Monospace: true}
 
 	pickTemplateBtn := widget.NewButtonWithIcon("Elegir template (.txt)…", theme.DocumentIcon(), func() {
 		ui.pickFile([]string{".txt"}, func(p string) {
 			ui.templatePath = p
-			ui.templateLabel.SetText(p)
+			ui.templateLabel.SetText(displayPath(p))
 			ui.validate()
 		})
 	})
 	pickExcelBtn := widget.NewButtonWithIcon("Elegir Excel (.xlsx)…", theme.ListIcon(), func() {
 		ui.pickFile([]string{".xlsx"}, func(p string) {
 			ui.excelPath = p
-			ui.excelLabel.SetText(p)
+			ui.excelLabel.SetText(displayPath(p))
 			ui.validate()
 		})
 	})
@@ -146,7 +153,7 @@ func newWindowUI(w fyne.Window, version string) *windowUI {
 		pickTemplateBtn, ui.templateLabel,
 		pickExcelBtn, ui.excelLabel,
 	)
-	filesCard := widget.NewCard("Archivos", "", container.NewVBox(filesGrid, ui.summaryLabel))
+	filesCard := section("Archivos", filesGrid, ui.summaryLabel)
 
 	// ── Run card ──
 	ui.dryRunCheck = widget.NewCheck("Dry-run (no conectar a los equipos, solo validar)", nil)
@@ -175,7 +182,7 @@ func newWindowUI(w fyne.Window, version string) *windowUI {
 	ui.statusLabel = widget.NewLabel("")
 	ui.statusLabel.Wrapping = fyne.TextWrapWord
 
-	runCard := widget.NewCard("Ejecución", "", container.NewVBox(ui.dryRunCheck, actions, ui.progress, ui.statusLabel))
+	runCard := section("Ejecución", ui.dryRunCheck, actions, ui.progress, ui.statusLabel)
 
 	// ── Console ──
 	ui.console = newConsoleView()
@@ -184,6 +191,20 @@ func newWindowUI(w fyne.Window, version string) *windowUI {
 	top := container.NewVBox(header, filesCard, runCard, consoleTitle)
 	ui.root = container.NewPadded(container.NewBorder(top, nil, nil, nil, ui.console.scroll))
 	return ui
+}
+
+// section is a framed group with a normal-size bold title. widget.Card's
+// own title renders at heading size, which outweighs the app name; an
+// untitled Card gives the frame and the title is just a bold label inside.
+func section(title string, content ...fyne.CanvasObject) fyne.CanvasObject {
+	items := append([]fyne.CanvasObject{widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})}, content...)
+	return widget.NewCard("", "", container.NewVBox(items...))
+}
+
+// displayPath puts the file name first so that, when the label truncates,
+// what disappears is the tail of the folder, not the name.
+func displayPath(p string) string {
+	return filepath.Base(p) + "  —  " + filepath.Dir(p)
 }
 
 // pathLabel is a single-line label that truncates long paths with an

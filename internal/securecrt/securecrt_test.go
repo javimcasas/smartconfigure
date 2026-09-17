@@ -112,13 +112,13 @@ func TestScriptsAreCRLFAndASCII(t *testing.T) {
 
 func TestVBStringEscaping(t *testing.T) {
 	cases := map[string]string{
-		`plain`:     `"plain"`,
-		`say "hi"`:  `"say ""hi"""`,
-		`wörd`:      `"w" & ChrW(246) & "rd"`,
-		`ö`:         `"" & ChrW(246)`,
-		`a	b`:       `"a" & ChrW(9) & "b"`,
-		`öö`:        `"" & ChrW(246) & ChrW(246)`,
-		``:          `""`,
+		`plain`:    `"plain"`,
+		`say "hi"`: `"say ""hi"""`,
+		`wörd`:     `"w" & ChrW(246) & "rd"`,
+		`ö`:        `"" & ChrW(246)`,
+		`a	b`:      `"a" & ChrW(9) & "b"`,
+		`öö`:       `"" & ChrW(246) & ChrW(246)`,
+		``:         `""`,
 	}
 	for in, want := range cases {
 		if got := vbString(in); got != want {

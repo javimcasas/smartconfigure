@@ -124,10 +124,11 @@ go mod tidy
 go build -o smartconfigure .
 ```
 
-Los tests (no necesitan cgo; excluyen el paquete `gui`):
+Los tests (los de `internal/gui` usan el driver de test de Fyne — sin
+pantalla, pero sí necesitan el compilador de C):
 
 ```bash
-go test $(go list ./internal/... | grep -v /gui)
+go test ./...
 ```
 
 El generador de scripts SecureCRT (`internal/securecrt`) se comprueba

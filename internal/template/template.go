@@ -60,13 +60,14 @@ func Load(path string) (*Template, error) {
 }
 
 // Render substitutes {VARIABLE} placeholders in a line using the given
-// values map. A placeholder with no matching value is left untouched, so
-// it's visible (and greppable) in the session log instead of silently
-// turning into an empty string.
+// values map. A placeholder with no matching value — or an empty one, which
+// is what an empty Excel cell loads as — is left untouched, so it's visible
+// (and greppable) in the session log and caught by HasUnresolvedPlaceholder
+// instead of silently turning into an empty string.
 func Render(line string, values map[string]string) string {
 	return varPattern.ReplaceAllStringFunc(line, func(match string) string {
 		name := match[1 : len(match)-1]
-		if v, ok := values[name]; ok {
+		if v, ok := values[name]; ok && v != "" {
 			return v
 		}
 		return match

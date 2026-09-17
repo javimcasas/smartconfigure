@@ -25,10 +25,14 @@ jobs:
       - name: Tidy modules
         run: go mod tidy
 
-      # Everything except the Fyne window is plain Go: run its tests before
-      # spending minutes on the cross-compilation.
+      # Run every test before spending minutes on the cross-compilation. The
+      # gui package tests use Fyne's software test driver (no display), but
+      # compiling it still needs the GL/X11 headers.
+      - name: Install GL headers for the gui tests
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libgl1-mesa-dev xorg-dev
+
       - name: Test
-        run: go test $(go list ./internal/... | grep -v /gui)
+        run: go test ./...
 
       - name: Install fyne-cross
         run: go install github.com/fyne-io/fyne-cross@latest
