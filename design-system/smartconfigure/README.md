@@ -11,7 +11,7 @@ the Fyne desktop window.
 | [`MASTER.md`](./MASTER.md) | Global source of truth — chosen style, colour/type/spacing tokens, components, a11y floor, anti-patterns. **Always read first.** |
 | [`pages/landing.md`](./pages/landing.md) | `public/index.html` — downloads, how it works, input format, CLI flags |
 | [`pages/logs.md`](./pages/logs.md) | `public/logs.html` — browser-side viewer for `*.log` + `report.csv` |
-| [`pages/desktop.md`](./pages/desktop.md) | `internal/gui/gui.go` — the Fyne window, and the contract for the planned *Export SecureCRT script* button |
+| [`pages/desktop.md`](./pages/desktop.md) | `internal/gui/gui.go` — the Fyne window (template -> Generate Excel -> fill -> Run), and the *Export SecureCRT script* contract |
 
 Page files **override** `MASTER.md` on conflict.
 

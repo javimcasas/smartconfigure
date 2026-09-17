@@ -41,8 +41,9 @@ to a valid SmartMatrix session); the page does not need to sell anything.
 │                                                                                 │
 │  ── How it works ───────────────────────────────────────────────────────────    │  h2#how
 │  ① Write a template …   ┌ example/template.txt excerpt (pre) ┐                  │  ol.steps + code
-│  ② Fill an Excel …      ┌ header row table (mono) ┐                             │
+│  ② Generate the Excel … ┌ header row table (mono) ┐                             │
 │  ③ Run …                                                                        │
+│  ④ Or export a SecureCRT script …                                               │
 │                                                                                 │
 │  ── What you get ───────────────────────────────────────────────────────────    │  h2#outputs
 │  [log] Per-device log   [csv] report.csv   [check] Dry-run                      │  .outputs (3-up)
@@ -92,16 +93,20 @@ flags table keeps its `.table-wrap` scroll (it is literal text).
 - **The template excerpt is real.** Copy the first ~10 lines of
   `example/template.txt` verbatim into the `<pre>`; when the example file
   changes, update the excerpt.
-- **Excel header table** shows the literal header row of the example:
-  `IP Equipo · Usuario · Contraseña · SWITCH_NAME · SSH_PASSWORD · GATEWAY_IP · MGMT_IP · SUBNET_MASK`,
-  all in mono, with a caption saying columns 1–3 are fixed and 4+ are the
-  template's variables (case-insensitive, no braces).
+- **Excel header table** shows the literal header row the app generates
+  for the example template (`excelsheet.Generate`, `fixedHeader`):
+  `IP Address · Username · Password · SWITCH_NAME · SSH_PASSWORD · GATEWAY_IP · MGMT_IP · SUBNET_MASK`,
+  all in mono. The step says the app writes this file next to the template
+  (*Generate Excel*) and the user fills one row per device; an existing
+  sheet with the same shape also works. If `fixedHeader` changes, this
+  table and `pages/desktop.md` change with it.
 - **Flags table** mirrors `main.go`'s `flag.*` definitions: `--template`,
-  `--excel`, `--out`, `--dry-run`, `--port`, `--connect-timeout`,
-  `--idle-timeout`, `--line-timeout`, `--version` with their defaults.
-  Defaults are mono.
-- **No feature that has not shipped.** SecureCRT export goes on this page
-  only when the binary that has it is on Releases.
+  `--excel`, `--out`, `--generate-excel`, `--dry-run`, `--export-securecrt`,
+  `--port`, `--connect-timeout`, `--idle-timeout`, `--line-timeout`,
+  `--version` with their defaults. Defaults are mono.
+- **No feature that has not shipped.** SecureCRT export (v0.2.0) and
+  Generate Excel (v0.3.0) are on the page because the binaries are on
+  Releases; the next feature waits for its tag.
 - **Security line** (footer or Format section): logs contain what was sent,
   including passwords if the template sends them; treat
   `smartconfigure-output/` as sensitive. One sentence, no scare styling.
@@ -124,7 +129,8 @@ flags table keeps its `.table-wrap` scroll (it is literal text).
 - Note: *Safe by default. Dry-run is on when the app opens: it renders every
   line for every device and flags missing values without connecting to
   anything. Untick it when the log looks right.*
-- Steps: *Write a template* / *Fill an Excel* / *Run — dry first, then live*.
+- Steps: *Write a template* / *Generate the Excel, then fill it* / *Run —
+  dry first, then live* / *Or export a SecureCRT script*.
 - Outputs: *Per-device log* — *A readable transcript of the whole SSH
   conversation, `<IP>.log`.* / *report.csv* — *One row per device: OK or
   FAILED, duration, error.* / *Dry-run* — *Same log format, nothing sent.*

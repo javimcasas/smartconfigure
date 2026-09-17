@@ -9,28 +9,33 @@ directo por SSH a los equipos de tu red.
 
 ## Cómo usarlo (interfaz gráfica)
 
-Al abrir el ejecutable (doble clic) se abre una ventana simple:
+Al abrir el ejecutable (doble clic) se abre una ventana simple (en inglés).
+Solo necesitas traer el template; el Excel te lo genera la propia app:
 
-1. **Elegir template (.txt)** — el bloque de comandos, con `{VARIABLE}` donde
+1. **Choose template (.txt)** — el bloque de comandos, con `{VARIABLE}` donde
    cambie por equipo. Ver ejemplo en [`example/template.txt`](example/template.txt).
-2. **Elegir Excel (.xlsx)** — una fila por equipo, con estas columnas:
-   - Columna 1: `IP Equipo` (IP de gestión)
-   - Columna 2: `Usuario`
-   - Columna 3: `Contraseña`
+   Nada más elegirlo, la ventana muestra cuántas líneas y variables tiene.
+2. **Generate Excel** — crea `devices.xlsx` junto al template (si ya existe,
+   `devices-2.xlsx`, etc.; nunca sobrescribe) con la fila de cabecera lista:
+   - Columna 1: `IP Address` (IP de gestión)
+   - Columna 2: `Username`
+   - Columna 3: `Password`
    - A partir de la columna 4: una columna por cada variable del template,
      con el nombre exacto de la variable (sin las llaves).
+   Además lleva una hoja *Instructions* con las reglas. **Open in Excel** lo
+   abre; rellena una fila por equipo y guarda. Si ya tienes un Excel con
+   esa misma forma, **Choose Excel (.xlsx)** lo usa directamente.
 3. Marca o desmarca **Dry-run** (por defecto activado: valida sin conectar
    a ningún equipo).
-4. **▶ Ejecutar**. El progreso aparece en pantalla, y al terminar puedes
-   abrir directamente la carpeta con los logs y el reporte.
-
-En cuanto eliges los dos archivos, la ventana los valida y muestra cuántos
-equipos, líneas y variables hay (o el primer error) antes de ejecutar nada.
+4. **▶ Run**. La app vuelve a leer el Excel del disco en cada ejecución, así
+   que basta con guardar en Excel y pulsar Run otra vez. El progreso aparece
+   en pantalla, y al terminar puedes abrir directamente la carpeta con los
+   logs y el reporte (**Open output folder**).
 
 ### Exportar un script para SecureCRT
 
 Si desde tu puesto solo puedes llegar a los equipos con **SecureCRT**, el
-botón **Exportar script SecureCRT** genera en `smartconfigure-output/` dos
+botón **Export SecureCRT script** genera en `smartconfigure-output/` dos
 ficheros equivalentes, `smartconfigure-securecrt.vbs` (Windows) y
 `smartconfigure-securecrt.py`, con el template ya renderizado para cada
 fila del Excel. SmartConfigure **no se conecta a nada** al exportar. Luego,
@@ -45,7 +50,7 @@ variable sin valor, no se exporta nada (mismo criterio que el dry-run).
 
 Ejemplo de cabecera de Excel para el template incluido:
 
-| IP Equipo | Usuario | Contraseña | SWITCH_NAME | SSH_PASSWORD | GATEWAY_IP | MGMT_IP | SUBNET_MASK |
+| IP Address | Username | Password | SWITCH_NAME | SSH_PASSWORD | GATEWAY_IP | MGMT_IP | SUBNET_MASK |
 |---|---|---|---|---|---|---|---|
 
 ## También funciona como línea de comandos
@@ -55,7 +60,8 @@ funcionando exactamente igual (si se pasan `--template`/`--excel`, se salta
 la interfaz gráfica):
 
 ```bash
-smartconfigure --template template.txt --excel equipos.xlsx --dry-run
+smartconfigure --template template.txt --generate-excel auto   # crea devices.xlsx junto al template
+smartconfigure --template template.txt --excel devices.xlsx --dry-run
 ```
 
 Por cada fila del Excel, SmartConfigure abre una sesión SSH interactiva,
@@ -83,6 +89,7 @@ ningún equipo real.
 | `--excel` | — | Ruta al Excel de equipos |
 | `--out` | `smartconfigure-output` | Carpeta de salida de logs y reporte |
 | `--dry-run` | `false` | Valida template + Excel sin conectar a ningún equipo |
+| `--generate-excel` | — | Escribe un Excel de equipos vacío para `--template` en esa ruta y sale; `auto` = `devices.xlsx` junto al template |
 | `--export-securecrt` | `false` | Escribe el script SecureCRT (`.vbs` + `.py`) en `--out` y sale, sin conectar a nada |
 | `--port` | `22` | Puerto SSH |
 | `--connect-timeout` | `10s` | Timeout de conexión SSH |
@@ -90,7 +97,7 @@ ningún equipo real.
 | `--line-timeout` | `15s` | Tope máximo de espera por línea |
 | `--version` | — | Muestra la versión y sale |
 
-Si no se pasa ni `--template` ni `--excel`, se abre la interfaz gráfica.
+Si no se pasa ningún flag de archivo, se abre la interfaz gráfica.
 
 ## Limitación conocida (v1)
 
@@ -135,6 +142,11 @@ El generador de scripts SecureCRT (`internal/securecrt`) se comprueba
 contra ficheros golden en `internal/securecrt/testdata/`; tras un cambio
 intencionado del script, regenera y revisa el diff con
 `go test ./internal/securecrt -update`.
+
+El icono de la app vive en `assets/icon.svg` (fuente) y se rasteriza a
+`Icon.png` (raíz, lo usa `fyne-cross -icon` en el workflow para el `.exe`)
+y a `internal/gui/icon.png` (embebido: icono de ventana y barra de tareas).
+Si cambias el SVG, regenera los dos PNG a 512 px.
 
 ## Descargar un binario ya compilado
 

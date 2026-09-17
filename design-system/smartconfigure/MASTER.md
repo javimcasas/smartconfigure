@@ -68,8 +68,9 @@ Consequences that outrank everything else:
 3. **Nothing is uploaded.** The Log Viewer parses locally; the landing says
    so. The Worker only checks the session — it never sees a log.
 4. **Some workstations may only touch the devices through SecureCRT.**
-   The planned *Export SecureCRT script* button (see `pages/desktop.md`)
-   exists for those; the web copy should not promise it until it ships.
+   The *Export SecureCRT script* button (shipped v0.2.0, contract in
+   `pages/desktop.md`) exists for those. Since v0.3.0 the user brings only
+   the template: the window generates the Excel (*Generate Excel*).
 
 It is a technical datasheet, not a marketing site: no testimonials, no
 countdowns, no pricing, no hero illustration.

@@ -27,10 +27,14 @@ import (
 	"github.com/javimcasas/smartconfigure/internal/template"
 )
 
-//go:embed icon.svg
-var iconSVG []byte
+// icon.png is the 512px brand mark (source: assets/icon.svg). A PNG, not
+// the SVG: Fyne rasterises SVG icons at whatever size the OS asks for and
+// the thin web glyph turned to mush in a 24px taskbar slot.
+//
+//go:embed icon.png
+var iconPNG []byte
 
-// defaultSSH is what the window uses for a real run and for the SecureCRT
+// defaultSSH is what the window uses for a live run and for the SecureCRT
 // export, so a script produced here behaves like a direct run. The CLI
 // exposes the same values as flags.
 var defaultSSH = sshrunner.Config{
@@ -66,20 +70,20 @@ func (t scTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) colo
 // ─── Window ────────────────────────────────────────────────────────────────
 
 // Launch opens the SmartConfigure graphical interface. It's the default
-// entry point when the binary is run with no --template/--excel flags
-// (i.e. double-clicked from Explorer/Finder), so most users never need to
-// touch a terminal at all. It shares the exact same batch.Run() engine and
-// securecrt generator as the CLI path in main.go, so behaviour never
+// entry point when the binary is run with no flags (i.e. double-clicked
+// from Explorer/Finder), so most users never need to touch a terminal.
+// It shares the exact same batch.Run() engine, Excel generator and
+// SecureCRT generator as the CLI path in main.go, so behaviour never
 // drifts between the two.
 func Launch(version string) {
 	a := app.New()
 	a.Settings().SetTheme(scTheme{theme.DefaultTheme()})
-	icon := fyne.NewStaticResource("smartconfigure.svg", iconSVG)
+	icon := fyne.NewStaticResource("smartconfigure.png", iconPNG)
 	a.SetIcon(icon)
 
 	w := a.NewWindow("SmartConfigure " + version)
 	w.SetIcon(icon)
-	w.Resize(fyne.NewSize(860, 680))
+	w.Resize(fyne.NewSize(880, 720))
 	w.CenterOnScreen()
 
 	ui := newWindowUI(w, version)
@@ -88,107 +92,125 @@ func Launch(version string) {
 }
 
 // windowUI holds every widget the handlers need. State lives here, not in
-// closures, so the three actions (validate, run, export) share it.
+// closures, so the actions (load template, generate Excel, check devices,
+// run, export) share it.
+//
+// The workflow is: choose a template → generate its Excel (or pick one) →
+// fill the Excel outside the app → Run / Export. Because the Excel is
+// edited *after* being chosen, Run and Export always re-read it from disk.
 type windowUI struct {
 	w       fyne.Window
 	version string
 
-	templatePath, excelPath, lastOutDir string
-	loaded                              *loadedInputs // set by validate(), nil until both files parse
+	templatePath string
+	tmpl         *template.Template // nil until the template parses
+	excelPath    string
+	lastOutDir   string
 
-	templateLabel, excelLabel, summaryLabel *widget.Label
-	dryRunCheck                             *widget.Check
-	runBtn, exportBtn, openOutputBtn        *widget.Button
-	progress                                *widget.ProgressBar
-	statusLabel                             *widget.Label
-	console                                 *consoleView
+	templateLabel, templateSummary *widget.Label
+	generateBtn                    *widget.Button
+	excelLabel, devicesSummary     *widget.Label
+	openExcelBtn                   *widget.Button
+	dryRunCheck                    *widget.Check
+	runBtn, exportBtn, openOutBtn  *widget.Button
+	progress                       *widget.ProgressBar
+	statusLabel                    *widget.Label
+	console                        *consoleView
 
-	root fyne.CanvasObject
-}
-
-// loadedInputs is the parsed template + Excel, kept so Run/Export don't
-// re-read the files after validate() already reported on them.
-type loadedInputs struct {
-	tmpl    *template.Template
-	devices []excelsheet.Device
+	root *fyne.Container
 }
 
 func newWindowUI(w fyne.Window, version string) *windowUI {
 	ui := &windowUI{w: w, version: version}
 
 	// ── Header ── brand mark + name at 20px, like the web topbar.
-	mark := canvas.NewImageFromResource(fyne.NewStaticResource("smartconfigure.svg", iconSVG))
+	mark := canvas.NewImageFromResource(fyne.NewStaticResource("smartconfigure.png", iconPNG))
 	mark.FillMode = canvas.ImageFillContain
 	mark.SetMinSize(fyne.NewSize(28, 28))
 	title := canvas.NewText("SmartConfigure", theme.Color(theme.ColorNameForeground))
 	title.TextSize = 20
 	title.TextStyle = fyne.TextStyle{Bold: true}
-	subtitle := widget.NewLabel("Ejecuta un template de comandos SSH sobre varios equipos definidos en un Excel.")
+	subtitle := widget.NewLabel("Push one command template to every device listed in an Excel sheet, over SSH.")
 	subtitle.Wrapping = fyne.TextWrapWord
 	header := container.NewVBox(container.NewHBox(mark, container.NewCenter(title)), subtitle)
 
-	// ── Files card ──
-	ui.templateLabel = pathLabel("Ningún template seleccionado")
-	ui.excelLabel = pathLabel("Ningún Excel seleccionado")
-	// Regular face on purpose: Fyne's bundled monospace clips underscores
-	// in labels, and variable names are full of them.
-	ui.summaryLabel = widget.NewLabel("")
-	ui.summaryLabel.Wrapping = fyne.TextWrapWord
-
-	pickTemplateBtn := widget.NewButtonWithIcon("Elegir template (.txt)…", theme.DocumentIcon(), func() {
+	// ── 1. Template ──
+	ui.templateLabel = pathLabel("No template selected")
+	ui.templateSummary = wrappedLabel("")
+	pickTemplateBtn := widget.NewButtonWithIcon("Choose template (.txt)…", theme.DocumentIcon(), func() {
 		ui.pickFile([]string{".txt"}, func(p string) {
 			ui.templatePath = p
 			ui.templateLabel.SetText(displayPath(p))
-			ui.validate()
+			ui.loadTemplate()
 		})
 	})
-	pickExcelBtn := widget.NewButtonWithIcon("Elegir Excel (.xlsx)…", theme.ListIcon(), func() {
-		ui.pickFile([]string{".xlsx"}, func(p string) {
-			ui.excelPath = p
-			ui.excelLabel.SetText(displayPath(p))
-			ui.validate()
-		})
-	})
-	filesGrid := container.New(newFormLayout(),
-		pickTemplateBtn, ui.templateLabel,
-		pickExcelBtn, ui.excelLabel,
+	ui.generateBtn = widget.NewButtonWithIcon("Generate Excel", theme.ContentAddIcon(), ui.generateExcel)
+	ui.generateBtn.Importance = widget.MediumImportance
+	ui.generateBtn.Disable()
+	templateSection := section("1. Template",
+		container.New(newFormLayout(), pickTemplateBtn, ui.templateLabel),
+		ui.templateSummary,
+		container.NewHBox(ui.generateBtn),
 	)
-	filesCard := section("Archivos", filesGrid, ui.summaryLabel)
 
-	// ── Run card ──
-	ui.dryRunCheck = widget.NewCheck("Dry-run (no conectar a los equipos, solo validar)", nil)
+	// ── 2. Devices ──
+	ui.excelLabel = pathLabel("No Excel selected — generate one from the template, or choose an existing file")
+	ui.devicesSummary = wrappedLabel("")
+	pickExcelBtn := widget.NewButtonWithIcon("Choose Excel (.xlsx)…", theme.ListIcon(), func() {
+		ui.pickFile([]string{".xlsx"}, func(p string) {
+			ui.setExcel(p)
+			ui.checkDevices()
+		})
+	})
+	ui.openExcelBtn = widget.NewButtonWithIcon("Open in Excel", theme.FileIcon(), func() {
+		if ui.excelPath != "" {
+			openPath(ui.excelPath)
+		}
+	})
+	ui.openExcelBtn.Importance = widget.LowImportance
+	ui.openExcelBtn.Disable()
+	devicesSection := section("2. Devices",
+		container.New(newFormLayout(), pickExcelBtn, ui.excelLabel),
+		ui.devicesSummary,
+		container.NewHBox(ui.openExcelBtn),
+	)
+
+	// ── 3. Run ──
+	ui.dryRunCheck = widget.NewCheck("Dry-run (validate only — nothing is sent to any device)", nil)
 	ui.dryRunCheck.SetChecked(true)
 
-	ui.runBtn = widget.NewButtonWithIcon("Ejecutar", theme.MediaPlayIcon(), ui.run)
+	ui.runBtn = widget.NewButtonWithIcon("Run", theme.MediaPlayIcon(), ui.run)
 	ui.runBtn.Importance = widget.HighImportance
 	ui.runBtn.Disable()
 
-	ui.exportBtn = widget.NewButtonWithIcon("Exportar script SecureCRT", theme.DownloadIcon(), ui.exportSecureCRT)
+	ui.exportBtn = widget.NewButtonWithIcon("Export SecureCRT script", theme.DownloadIcon(), ui.exportSecureCRT)
 	ui.exportBtn.Importance = widget.MediumImportance
 	ui.exportBtn.Disable()
 
-	ui.openOutputBtn = widget.NewButtonWithIcon("Abrir carpeta de resultados", theme.FolderOpenIcon(), func() {
+	ui.openOutBtn = widget.NewButtonWithIcon("Open output folder", theme.FolderOpenIcon(), func() {
 		if ui.lastOutDir != "" {
-			openFolder(ui.lastOutDir)
+			openPath(ui.lastOutDir)
 		}
 	})
-	ui.openOutputBtn.Importance = widget.LowImportance
-	ui.openOutputBtn.Disable()
-
-	actions := container.NewHBox(ui.runBtn, ui.exportBtn, ui.openOutputBtn)
+	ui.openOutBtn.Importance = widget.LowImportance
+	ui.openOutBtn.Disable()
 
 	ui.progress = widget.NewProgressBar()
 	ui.progress.Hide()
-	ui.statusLabel = widget.NewLabel("")
-	ui.statusLabel.Wrapping = fyne.TextWrapWord
+	ui.statusLabel = wrappedLabel("")
 
-	runCard := section("Ejecución", ui.dryRunCheck, actions, ui.progress, ui.statusLabel)
+	runSection := section("3. Run",
+		ui.dryRunCheck,
+		container.NewHBox(ui.runBtn, ui.exportBtn, ui.openOutBtn),
+		ui.progress,
+		ui.statusLabel,
+	)
 
 	// ── Console ──
 	ui.console = newConsoleView()
-	consoleTitle := widget.NewLabelWithStyle("Progreso", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	consoleTitle := widget.NewLabelWithStyle("Progress", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 
-	top := container.NewVBox(header, filesCard, runCard, consoleTitle)
+	top := container.NewVBox(header, templateSection, devicesSection, runSection, consoleTitle)
 	ui.root = container.NewPadded(container.NewBorder(top, nil, nil, nil, ui.console.scroll))
 	return ui
 }
@@ -215,6 +237,36 @@ func pathLabel(placeholder string) *widget.Label {
 	return l
 }
 
+// wrappedLabel is the regular face on purpose: Fyne's bundled monospace
+// clips underscores in labels, and variable names are full of them. It
+// starts hidden: an empty label still takes a row, and every section
+// would open with a blank gap. setNote shows it with its first text.
+func wrappedLabel(text string) *widget.Label {
+	l := widget.NewLabel(text)
+	l.Wrapping = fyne.TextWrapWord
+	if text == "" {
+		l.Hide()
+	}
+	return l
+}
+
+// setNote sets a wrappedLabel's text and hides it again when cleared.
+// Showing or hiding a label changes its section's height, and Show() alone
+// does not re-run the enclosing layouts, so the whole tree is refreshed
+// when visibility flips (rare: first message, or clearing one).
+func (ui *windowUI) setNote(l *widget.Label, text string) {
+	l.SetText(text)
+	wasVisible := l.Visible()
+	if text == "" {
+		l.Hide()
+	} else {
+		l.Show()
+	}
+	if l.Visible() != wasVisible {
+		ui.root.Refresh()
+	}
+}
+
 // pickFile opens the native file dialog filtered to exts, starting in the
 // folder of the previously chosen file so the second pick is one click.
 func (ui *windowUI) pickFile(exts []string, onPick func(path string)) {
@@ -235,70 +287,135 @@ func (ui *windowUI) pickFile(exts []string, onPick func(path string)) {
 	fd.Show()
 }
 
-// ─── Validate ──────────────────────────────────────────────────────────────
+// ─── 1. Template ───────────────────────────────────────────────────────────
 
-// validate parses both files as soon as they are chosen and reports the
-// shape of the batch (or the first problem) before the user presses
-// anything. Run and Export are only enabled once both parse.
-func (ui *windowUI) validate() {
-	ui.loaded = nil
-	ui.runBtn.Disable()
-	ui.exportBtn.Disable()
-	if ui.templatePath == "" || ui.excelPath == "" {
-		ui.summaryLabel.SetText("")
-		return
-	}
-
+// loadTemplate parses the chosen template and reports its shape. It is the
+// gate for everything else: without a parsed template there is nothing to
+// generate an Excel from and nothing to run.
+func (ui *windowUI) loadTemplate() {
+	ui.tmpl = nil
+	ui.generateBtn.Disable()
 	tmpl, err := template.Load(ui.templatePath)
 	if err != nil {
-		ui.setSummary("✗ Template: " + err.Error())
+		ui.setNote(ui.templateSummary, "✗ Template: "+err.Error())
+		ui.refreshActions()
 		return
 	}
-	devices, err := excelsheet.Load(ui.excelPath, tmpl.Variables)
-	if err != nil {
-		ui.setSummary("✗ Excel: " + err.Error())
-		return
+	ui.tmpl = tmpl
+	ui.setNote(ui.templateSummary, fmt.Sprintf("✓ %d lines · %d variables: %s",
+		len(tmpl.Lines), len(tmpl.Variables), strings.Join(tmpl.Variables, ", ")))
+	ui.generateBtn.Enable()
+	// An Excel chosen for a previous template may not match this one.
+	if ui.excelPath != "" {
+		ui.checkDevices()
 	}
-	if len(devices) == 0 {
-		ui.setSummary("✗ El Excel no tiene ninguna fila de equipos.")
-		return
-	}
-
-	ui.loaded = &loadedInputs{tmpl: tmpl, devices: devices}
-	ui.setSummary(fmt.Sprintf("✓ %d equipo(s) · %d línea(s) · %d variable(s): %s",
-		len(devices), len(tmpl.Lines), len(tmpl.Variables), strings.Join(tmpl.Variables, ", ")))
-	ui.runBtn.Enable()
-	ui.exportBtn.Enable()
+	ui.refreshActions()
 }
 
-func (ui *windowUI) setSummary(text string) {
-	ui.summaryLabel.SetText(text)
+// generateExcel writes the devices workbook for the template next to it
+// (never overwriting an existing one) and makes it the chosen Excel.
+func (ui *windowUI) generateExcel() {
+	if ui.tmpl == nil {
+		return
+	}
+	path := excelsheet.DefaultExcelPath(ui.templatePath)
+	if err := excelsheet.Generate(path, ui.tmpl.Variables); err != nil {
+		dialog.ShowError(fmt.Errorf("could not create the Excel file: %w", err), ui.w)
+		return
+	}
+	ui.setExcel(path)
+	ui.setNote(ui.devicesSummary, fmt.Sprintf(
+		"✓ %s created next to the template with the header row (%d variable columns). Fill one row per device, save, then Run — the file is re-read every time.",
+		filepath.Base(path), len(ui.tmpl.Variables)))
+	ui.refreshActions()
+}
+
+// ─── 2. Devices ────────────────────────────────────────────────────────────
+
+func (ui *windowUI) setExcel(path string) {
+	ui.excelPath = path
+	ui.excelLabel.SetText(displayPath(path))
+	ui.openExcelBtn.Enable()
+}
+
+// checkDevices re-reads the Excel and reports how many devices it holds,
+// or the loader's error. Informational: Run/Export read the file again.
+func (ui *windowUI) checkDevices() {
+	devices, err := ui.loadDevices()
+	if err != nil {
+		ui.setNote(ui.devicesSummary, "✗ Excel: "+err.Error())
+	} else {
+		ui.setNote(ui.devicesSummary, fmt.Sprintf("✓ %d devices", len(devices)))
+	}
+	ui.refreshActions()
+}
+
+// loadDevices is the single place both actions get the batch from, so a
+// sheet edited after being chosen is always read fresh.
+func (ui *windowUI) loadDevices() ([]excelsheet.Device, error) {
+	if ui.tmpl == nil {
+		return nil, fmt.Errorf("choose a valid template first")
+	}
+	devices, err := excelsheet.Load(ui.excelPath, ui.tmpl.Variables)
+	if err != nil {
+		return nil, err
+	}
+	if len(devices) == 0 {
+		return nil, fmt.Errorf("the Excel file has no device rows")
+	}
+	return devices, nil
+}
+
+// refreshActions enables Run/Export once a template is parsed and an Excel
+// is chosen. Whether the Excel is *filled* is checked when the action
+// runs, because the user fills it after choosing it.
+func (ui *windowUI) refreshActions() {
+	if ui.tmpl != nil && ui.excelPath != "" {
+		ui.runBtn.Enable()
+		ui.exportBtn.Enable()
+		return
+	}
+	ui.runBtn.Disable()
+	ui.exportBtn.Disable()
 }
 
 // outDir is always next to the Excel, for runs and exports alike.
 func (ui *windowUI) outDir() (string, error) {
 	dir := filepath.Join(filepath.Dir(ui.excelPath), "smartconfigure-output")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("no se pudo crear la carpeta de salida: %w", err)
+		return "", fmt.Errorf("could not create the output folder: %w", err)
 	}
 	ui.lastOutDir = dir
 	return dir, nil
 }
 
-// ─── Run ───────────────────────────────────────────────────────────────────
+// ─── 3. Run ────────────────────────────────────────────────────────────────
+
+// prepareBatch re-reads the Excel for an action and reports a loader error
+// in the Devices section, where the user can act on it.
+func (ui *windowUI) prepareBatch(action string) ([]excelsheet.Device, bool) {
+	devices, err := ui.loadDevices()
+	if err != nil {
+		ui.setNote(ui.devicesSummary, "✗ Excel: "+err.Error())
+		ui.setNote(ui.statusLabel, "Nothing was "+action+": fix the Excel first.")
+		return nil, false
+	}
+	ui.setNote(ui.devicesSummary, fmt.Sprintf("✓ %d devices", len(devices)))
+	return devices, true
+}
 
 func (ui *windowUI) run() {
-	if ui.loaded == nil {
-		dialog.ShowInformation("Faltan archivos", "Elige primero un template y un Excel válidos.", ui.w)
+	devices, ok := ui.prepareBatch("run")
+	if !ok {
 		return
 	}
-	in := ui.loaded
+	lines := ui.tmpl.Lines
 	dryRun := ui.dryRunCheck.Checked
 
 	ui.setBusy(true)
 	ui.console.Clear()
 	ui.progress.SetValue(0)
-	ui.progress.Show()
+	ui.showProgress(true)
 
 	go func() {
 		defer fyne.Do(func() { ui.setBusy(false) })
@@ -309,19 +426,19 @@ func (ui *windowUI) run() {
 			return
 		}
 
-		mode := "REAL (conectará a los equipos)"
+		mode := "LIVE (connecting to the devices)"
 		if dryRun {
-			mode = "DRY-RUN (no conecta a nada)"
+			mode = "DRY-RUN (no connection)"
 		}
-		ui.console.Append(fmt.Sprintf("Modo: %s", mode))
-		ui.console.Append(fmt.Sprintf("%d equipo(s), %d línea(s) de template", len(in.devices), len(in.tmpl.Lines)))
+		ui.console.Append("Mode: " + mode)
+		ui.console.Append(fmt.Sprintf("%d device(s), %d template line(s)", len(devices), len(lines)))
 		ui.console.Append("")
-		ui.setStatus(fmt.Sprintf("Ejecutando 0/%d…", len(in.devices)))
+		ui.setStatus(fmt.Sprintf("Running 0/%d…", len(devices)))
 
-		total := len(in.devices)
+		total := len(devices)
 		results, err := batch.Run(batch.Options{
-			Devices: in.devices,
-			Lines:   in.tmpl.Lines,
+			Devices: devices,
+			Lines:   lines,
 			OutDir:  outDir,
 			DryRun:  dryRun,
 			SSH:     defaultSSH,
@@ -333,7 +450,7 @@ func (ui *windowUI) run() {
 					ui.console.Append(fmt.Sprintf("[%d/%d] %s ... FAILED (%s): %s", p.Index, p.Total, p.Device, dur, p.Result.Error))
 				}
 				fyne.Do(func() { ui.progress.SetValue(float64(p.Index) / float64(total)) })
-				ui.setStatus(fmt.Sprintf("Ejecutando %d/%d…", p.Index, total))
+				ui.setStatus(fmt.Sprintf("Running %d/%d…", p.Index, total))
 			},
 		})
 		if err != nil {
@@ -348,41 +465,39 @@ func (ui *windowUI) run() {
 			}
 		}
 		ui.console.Append("")
-		ui.console.Append(fmt.Sprintf("Hecho: %d/%d correctos.", ok, len(results)))
-		ui.console.Append("Logs y report.csv guardados en:")
+		ui.console.Append(fmt.Sprintf("Done: %d/%d succeeded.", ok, len(results)))
+		ui.console.Append("Logs and report.csv saved in:")
 		ui.console.Append(outDir)
 
-		summary := fmt.Sprintf("Hecho: %d OK, %d fallidos.", ok, len(results)-ok)
+		summary := fmt.Sprintf("Done: %d OK, %d failed.", ok, len(results)-ok)
 		if dryRun {
-			summary = fmt.Sprintf("Dry-run terminado: %d OK, %d con variables sin valor.", ok, len(results)-ok)
+			summary = fmt.Sprintf("Dry-run done: %d OK, %d with missing values.", ok, len(results)-ok)
 		}
 		ui.setStatus(summary)
-		fyne.Do(func() { ui.openOutputBtn.Enable() })
+		fyne.Do(func() { ui.openOutBtn.Enable() })
 	}()
 }
 
-// ─── Export ────────────────────────────────────────────────────────────────
-
-// exportSecureCRT writes the SecureCRT scripts for the loaded batch. Pure
-// file output: it never connects, so it is allowed with Dry-run ticked.
+// exportSecureCRT writes the SecureCRT scripts for the batch. Pure file
+// output: it never connects, so it is allowed with Dry-run ticked.
 func (ui *windowUI) exportSecureCRT() {
-	if ui.loaded == nil {
-		dialog.ShowInformation("Faltan archivos", "Elige primero un template y un Excel válidos.", ui.w)
+	devices, ok := ui.prepareBatch("exported")
+	if !ok {
 		return
 	}
-	in := ui.loaded
+	lines := ui.tmpl.Lines
 
 	ui.setBusy(true)
 	ui.console.Clear()
-	ui.progress.Hide()
+	ui.showProgress(false)
 
 	go func() {
 		defer fyne.Do(func() { ui.setBusy(false) })
 
-		rendered, err := securecrt.Build(in.devices, in.tmpl.Lines)
+		rendered, err := securecrt.Build(devices, lines)
 		if err != nil {
 			ui.console.Append("ERROR: " + err.Error())
-			ui.setStatus("No se ha exportado nada: revisa el Excel.")
+			ui.setStatus("Nothing was exported: fix the Excel first.")
 			return
 		}
 		outDir, err := ui.outDir()
@@ -401,21 +516,21 @@ func (ui *windowUI) exportSecureCRT() {
 			Devices:      rendered,
 		}, outDir)
 		if err != nil {
-			ui.console.Append("ERROR: no se pudo escribir el script: " + err.Error())
+			ui.console.Append("ERROR: could not write the script: " + err.Error())
 			return
 		}
 
-		ui.console.Append(fmt.Sprintf("Script SecureCRT generado para %d equipo(s):", len(rendered)))
+		ui.console.Append(fmt.Sprintf("SecureCRT script written for %d device(s):", len(rendered)))
 		for _, p := range paths {
 			ui.console.Append("  " + p)
 		}
 		ui.console.Append("")
-		ui.console.Append("Cómo usarlo: abre SecureCRT → Script → Run… → elige el .vbs (Windows) o el .py.")
-		ui.console.Append("El script conecta a cada equipo, envía el template y deja un <IP>.securecrt.log junto al script.")
+		ui.console.Append("How to use: open SecureCRT → Script → Run… → pick the .vbs (Windows) or the .py.")
+		ui.console.Append("The script connects to each device, sends the template and leaves <IP>.securecrt.log next to itself.")
 		ui.console.Append("")
-		ui.console.Append("AVISO: el script contiene los usuarios y contraseñas del Excel. No lo compartas ni lo subas a ningún sitio.")
-		ui.setStatus(fmt.Sprintf("Script exportado (%d equipos). SmartConfigure no ha conectado a nada.", len(rendered)))
-		fyne.Do(func() { ui.openOutputBtn.Enable() })
+		ui.console.Append("WARNING: the script contains the usernames and passwords from the Excel. Do not share or upload it.")
+		ui.setStatus(fmt.Sprintf("Script exported (%d devices). Nothing was sent to any device.", len(rendered)))
+		fyne.Do(func() { ui.openOutBtn.Enable() })
 	}()
 }
 
@@ -425,18 +540,29 @@ func (ui *windowUI) setBusy(busy bool) {
 	if busy {
 		ui.runBtn.Disable()
 		ui.exportBtn.Disable()
-		ui.openOutputBtn.Disable()
+		ui.openOutBtn.Disable()
 		return
 	}
-	if ui.loaded != nil {
-		ui.runBtn.Enable()
-		ui.exportBtn.Enable()
+	ui.refreshActions()
+}
+
+// showProgress toggles the bar and re-lays out the Run section, for the
+// same reason as setNote.
+func (ui *windowUI) showProgress(show bool) {
+	if show == ui.progress.Visible() {
+		return
 	}
+	if show {
+		ui.progress.Show()
+	} else {
+		ui.progress.Hide()
+	}
+	ui.root.Refresh()
 }
 
 // setStatus is safe to call from any goroutine.
 func (ui *windowUI) setStatus(text string) {
-	fyne.Do(func() { ui.statusLabel.SetText(text) })
+	fyne.Do(func() { ui.setNote(ui.statusLabel, text) })
 }
 
 func firstNonEmpty(values ...string) string {
@@ -448,10 +574,11 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-// openFolder opens path in the OS's default file manager. Best-effort:
-// errors are ignored since this is just a convenience shortcut, not a
-// core feature — the output folder path is always shown in the console too.
-func openFolder(path string) {
+// openPath opens a folder in the file manager or a file in its default
+// application (the generated .xlsx in Excel). Best-effort: errors are
+// ignored since this is a convenience shortcut — every path is also
+// printed in the window.
+func openPath(path string) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
@@ -509,7 +636,7 @@ func (c *consoleView) styleRows() {
 		switch {
 		case strings.Contains(l, "... OK ("):
 			c.grid.SetRowStyle(i, okStyle)
-		case strings.Contains(l, "... FAILED (") || strings.HasPrefix(l, "ERROR:") || strings.HasPrefix(l, "AVISO:"):
+		case strings.Contains(l, "... FAILED (") || strings.HasPrefix(l, "ERROR:") || strings.HasPrefix(l, "WARNING:"):
 			c.grid.SetRowStyle(i, failStyle)
 		}
 	}

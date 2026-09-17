@@ -28,6 +28,7 @@ func main() {
 	lineTimeout := flag.Duration("line-timeout", 15*time.Second, "Max time to wait for a single line's output before giving up on it")
 	dryRun := flag.Bool("dry-run", false, "Validate the template and Excel without connecting to any device")
 	exportSecureCRT := flag.Bool("export-securecrt", false, "Write a SecureCRT script (.vbs + .py) that runs the batch, without connecting to any device")
+	generateExcel := flag.String("generate-excel", "", "Write an empty devices Excel for --template at this path and exit; use 'auto' for devices.xlsx next to the template")
 	showVersion := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
 
@@ -41,8 +42,30 @@ func main() {
 	// interface instead of a bare command-line usage message. The CLI
 	// flags below remain fully functional for scripted/automated use —
 	// the GUI and the CLI share the exact same batch.Run() engine.
-	if *templatePath == "" && *excelPath == "" {
+	if *templatePath == "" && *excelPath == "" && *generateExcel == "" {
 		gui.Launch(version)
+		return
+	}
+
+	// Generate mode only needs the template: it writes the Excel the user
+	// then fills in and feeds back with --excel.
+	if *generateExcel != "" {
+		if *templatePath == "" {
+			fatalf("--generate-excel needs --template to know which variable columns to create.")
+		}
+		tmpl, err := template.Load(*templatePath)
+		if err != nil {
+			fatalf("Could not read template: %v", err)
+		}
+		path := *generateExcel
+		if path == "auto" {
+			path = excelsheet.DefaultExcelPath(*templatePath)
+		}
+		if err := excelsheet.Generate(path, tmpl.Variables); err != nil {
+			fatalf("Could not write the Excel file: %v", err)
+		}
+		fmt.Printf("Devices Excel written to %s (%d variable column(s): %v)\n", path, len(tmpl.Variables), tmpl.Variables)
+		fmt.Println("Fill one row per device, then run with --template and --excel.")
 		return
 	}
 

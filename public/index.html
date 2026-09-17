@@ -130,11 +130,11 @@ save</code></pre>
         </li>
         <li>
           <div class="step-body">
-            <h3>Fill an Excel</h3>
-            <p>One row per device on the first sheet. The first three columns are fixed; from the fourth on, one column per template variable, named exactly like the variable (case-insensitive, no braces).</p>
+            <h3>Generate the Excel, then fill it</h3>
+            <p>Choose the template in the window and press <strong>Generate Excel</strong>: SmartConfigure writes <code>devices.xlsx</code> next to it with the header row already in place — three fixed columns, then one column per variable the template uses. Open it, add one row per device, save. (An Excel you already have works too, as long as its header follows the same shape.)</p>
             <div class="table-wrap">
               <table class="spec-table">
-                <thead><tr><th class="mono" scope="col">IP Equipo</th><th class="mono" scope="col">Usuario</th><th class="mono" scope="col">Contraseña</th><th class="mono" scope="col">SWITCH_NAME</th><th class="mono" scope="col">SSH_PASSWORD</th><th class="mono" scope="col">GATEWAY_IP</th><th class="mono" scope="col">MGMT_IP</th><th class="mono" scope="col">SUBNET_MASK</th></tr></thead>
+                <thead><tr><th class="mono" scope="col">IP Address</th><th class="mono" scope="col">Username</th><th class="mono" scope="col">Password</th><th class="mono" scope="col">SWITCH_NAME</th><th class="mono" scope="col">SSH_PASSWORD</th><th class="mono" scope="col">GATEWAY_IP</th><th class="mono" scope="col">MGMT_IP</th><th class="mono" scope="col">SUBNET_MASK</th></tr></thead>
                 <tbody>
                   <tr><td class="mono">10.10.1.21</td><td class="mono">admin</td><td class="mono">••••••</td><td class="mono">SW-CORE-01</td><td class="mono">••••••</td><td class="mono">10.10.1.1</td><td class="mono">10.10.1.21</td><td class="mono">255.255.255.0</td></tr>
                   <tr><td class="mono">10.10.1.22</td><td class="mono">admin</td><td class="mono">••••••</td><td class="mono">SW-CORE-02</td><td class="mono">••••••</td><td class="mono">10.10.1.1</td><td class="mono">10.10.1.22</td><td class="mono">255.255.255.0</td></tr>
@@ -146,7 +146,13 @@ save</code></pre>
         <li>
           <div class="step-body">
             <h3>Run — dry first, then live</h3>
-            <p>Pick both files in the window and press <strong>Run</strong>. With Dry-run ticked, SmartConfigure writes what it <em>would</em> send to each device and stops. Untick it and it opens one SSH session per row, sends the template line by line, and shows progress as each device finishes.</p>
+            <p>Press <strong>Run</strong>. The Excel is re-read from disk every time, so save and run again after each edit. With Dry-run ticked, SmartConfigure writes what it <em>would</em> send to each device and stops. Untick it and it opens one SSH session per row, sends the template line by line, and shows progress as each device finishes.</p>
+          </div>
+        </li>
+        <li>
+          <div class="step-body">
+            <h3>Or export a SecureCRT script</h3>
+            <p>If your workstation can only reach the devices through <strong>SecureCRT</strong>, press <strong>Export SecureCRT script</strong> instead of Run. SmartConfigure writes <code>smartconfigure-securecrt.vbs</code> (and a <code>.py</code> twin) with the template already rendered for every row, and connects to nothing. In SecureCRT: <em>Script → Run…</em> → pick the file. It opens one SSH2 session per device, waits for the prompt after each line and leaves an <code>&lt;IP&gt;.securecrt.log</code> next to itself. The script carries the Excel credentials — treat it like the Excel.</p>
           </div>
         </li>
       </ol>
@@ -192,8 +198,10 @@ save</code></pre>
     <section class="block" aria-labelledby="cli">
       <h2 id="cli">Command line</h2>
       <p class="prose muted">Passing <code>--template</code> and <code>--excel</code> skips the window and runs headless — same engine, same outputs. Handy for scripts and for machines without a desktop session.</p>
-<pre><code>smartconfigure --template template.txt --excel devices.xlsx --dry-run
-smartconfigure --template template.txt --excel devices.xlsx --out ./run-2026-09-17</code></pre>
+<pre><code>smartconfigure --template template.txt --generate-excel auto
+smartconfigure --template template.txt --excel devices.xlsx --dry-run
+smartconfigure --template template.txt --excel devices.xlsx --out ./run-2026-09-17
+smartconfigure --template template.txt --excel devices.xlsx --export-securecrt</code></pre>
       <div class="table-wrap">
         <table class="spec-table">
           <thead><tr><th scope="col">Flag</th><th scope="col">Default</th><th scope="col">Description</th></tr></thead>
@@ -201,7 +209,9 @@ smartconfigure --template template.txt --excel devices.xlsx --out ./run-2026-09-
             <tr><td class="mono">--template</td><td class="mono">—</td><td class="wrap">Path to the command template file</td></tr>
             <tr><td class="mono">--excel</td><td class="mono">—</td><td class="wrap">Path to the devices Excel file</td></tr>
             <tr><td class="mono">--out</td><td class="mono">smartconfigure-output</td><td class="wrap">Output directory for logs and report</td></tr>
+            <tr><td class="mono">--generate-excel</td><td class="mono">—</td><td class="wrap">Write an empty devices Excel for <code>--template</code> at this path and exit; <code>auto</code> puts <code>devices.xlsx</code> next to the template</td></tr>
             <tr><td class="mono">--dry-run</td><td class="mono">false</td><td class="wrap">Validate the template and Excel without connecting to any device</td></tr>
+            <tr><td class="mono">--export-securecrt</td><td class="mono">false</td><td class="wrap">Write the SecureCRT script (<code>.vbs</code> + <code>.py</code>) into <code>--out</code> and exit, without connecting to any device</td></tr>
             <tr><td class="mono">--port</td><td class="mono">22</td><td class="wrap">SSH port</td></tr>
             <tr><td class="mono">--connect-timeout</td><td class="mono">10s</td><td class="wrap">SSH connection timeout</td></tr>
             <tr><td class="mono">--idle-timeout</td><td class="mono">800ms</td><td class="wrap">How long to wait for the device to go quiet before sending the next line</td></tr>
