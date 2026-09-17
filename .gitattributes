@@ -1,0 +1,2 @@
+# Golden files pin exact bytes (CRLF): never let git touch their line endings.
+*.golden -text
