@@ -1,6 +1,6 @@
 # Page: Log Viewer — overrides MASTER
 
-`landing/logs.html`; logic in `landing/logs.js` (`parseLog`, `parseCsv`,
+`public/logs.html`; logic in `public/logs.js` (`parseLog`, `parseCsv`,
 `render`, `buildDevice`). Deployed at
 `https://smartconfigure.hubsmartmatrix.com/logs.html`.
 

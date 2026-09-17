@@ -1,8 +1,9 @@
 # Page: Landing — overrides MASTER
 
-`landing/index.html`; behaviour in `landing/theme.js` (theme, OS detection,
-latest-release badge). Deployed as a static asset at
-`https://smartconfigure.hubsmartmatrix.com/`.
+`public/index.html`; behaviour in `public/theme.js` (theme, OS detection,
+latest-release badge). Served by `src/index.js` behind SmartMatrix SSO at
+`https://smartconfigure.hubsmartmatrix.com/` (visitors arrive through the
+hub's `/launch/smartconfigure`).
 
 ## Purpose
 
@@ -16,8 +17,8 @@ Three jobs, in this order of importance:
 3. **Set expectations honestly**: this runs on your machine, over SSH, on
    real gear; dry-run first.
 
-The hub card already got the visitor here (they are logged in to
-SmartMatrix); the page does not need to sell anything.
+The hub card already got the visitor here (the Worker only serves the page
+to a valid SmartMatrix session); the page does not need to sell anything.
 
 ## Layout
 

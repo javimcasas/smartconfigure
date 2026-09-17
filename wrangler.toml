@@ -1,0 +1,20 @@
+name = "smartconfigure"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true             # the Worker checks the session cookie before any asset is served
+
+routes = [
+  { pattern = "smartconfigure.hubsmartmatrix.com", custom_domain = true }
+]
+
+[observability]
+enabled = true
+
+# Secrets (set with `npx wrangler secret put <NAME>`):
+# - SSO_SHARED_SECRET or SSO_SECRET  (same value as smartmatrix-auth's SSO_SECRET; either name works)
+# No AUTH service binding: the landing calls no AI provider and needs no per-user keys.
+# Deployed by Cloudflare Workers Builds on every push to main (like every other app).

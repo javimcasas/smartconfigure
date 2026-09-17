@@ -9,8 +9,8 @@ the Fyne desktop window.
 | File | Use |
 |------|-----|
 | [`MASTER.md`](./MASTER.md) | Global source of truth — chosen style, colour/type/spacing tokens, components, a11y floor, anti-patterns. **Always read first.** |
-| [`pages/landing.md`](./pages/landing.md) | `landing/index.html` — downloads, how it works, input format, CLI flags |
-| [`pages/logs.md`](./pages/logs.md) | `landing/logs.html` — browser-side viewer for `*.log` + `report.csv` |
+| [`pages/landing.md`](./pages/landing.md) | `public/index.html` — downloads, how it works, input format, CLI flags |
+| [`pages/logs.md`](./pages/logs.md) | `public/logs.html` — browser-side viewer for `*.log` + `report.csv` |
 | [`pages/desktop.md`](./pages/desktop.md) | `internal/gui/gui.go` — the Fyne window, and the contract for the planned *Export SecureCRT script* button |
 
 Page files **override** `MASTER.md` on conflict.
@@ -45,21 +45,21 @@ back from a device is set in mono, unwrapped, unformatted.
 > surface. Read `design-system/smartconfigure/MASTER.md`, then
 > `design-system/smartconfigure/pages/<surface>.md`. Apply the page file
 > where it conflicts with MASTER; otherwise apply MASTER. Use the
-> tokens/classes in `landing/style.css` as-is.
+> tokens/classes in `public/style.css` as-is.
 
 ## Maintenance
 
-- `landing/style.css` `:root` is the real token store. When it changes,
+- `public/style.css` `:root` is the real token store. When it changes,
   update `MASTER.md` §2 / §4 to match.
 - Contrast pairs in `MASTER.md` §2 are **measured**, not estimated.
   Re-measure before changing any colour token.
-- `landing/index.html` download URLs must match the asset names in
+- `public/index.html` download URLs must match the asset names in
   `.github/workflows/release.yml`. Change both in the same commit.
-- `landing/logs.js` `parseLog` mirrors `internal/sshrunner` writers.
+- `public/logs.js` `parseLog` mirrors `internal/sshrunner` writers.
   Change both in the same commit.
 - Generated with the `ui-ux-pro-max` skill
   (`--design-system --variance 3 --motion 2 --density 6`), then curated to
   the codebase. Re-run the skill for fresh options; do not let it overwrite
   these curated files.
-- Only `landing/` is deployed (Cloudflare assets). `design-system/` never
-  ships.
+- `src/index.js` + `public/` are what Workers Builds deploys on every push
+  to `main`. `design-system/`, `internal/` and `test` data never ship.

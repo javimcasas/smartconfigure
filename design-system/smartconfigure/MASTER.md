@@ -20,28 +20,30 @@ signal-yellow draft).
 SmartConfigure is **not a web app**. It is a Go desktop program (Fyne GUI +
 CLI) that opens SSH sessions to many network devices and sends the same
 command template to each one, with `{VARIABLE}` placeholders filled from an
-Excel row. The web part is a **static landing** on Cloudflare (assets only,
-no Worker, no SSO) that exists to hand out the binaries, explain the input
+Excel row. The web part is a **landing** on Cloudflare — a Worker that only
+gates access behind SmartMatrix SSO and serves `public/` as static assets,
+like HyperParse — that exists to hand out the binaries, explain the input
 format, and host a browser-side **Log Viewer** for the files the tool
 produces.
 
 | File | Role |
 |------|------|
+| `src/index.js` | Worker: `?sso=` handoff → `sc_session` cookie (24h), 401/302 on a dead session, `/api/me`. Do not restyle. |
 | `main.go`, `internal/*` | The desktop tool. `gui/gui.go` is the Fyne window; `batch/` drives one run; `sshrunner/` writes the per-device `.log`; `report/` writes `report.csv` |
-| `landing/index.html` | Landing: downloads, how it works, input format, outputs, CLI flags |
-| `landing/logs.html` + `landing/logs.js` | Log Viewer: drop `.log` / `report.csv`, parsed in the browser |
-| `landing/style.css` | **The entire web design system** — tokens in `:root`, every component class |
-| `landing/theme.js` | Theme init + toggle, OS detection for the primary download button, latest-release badge |
-| `landing/favicon.svg` | Brand mark |
-| `wrangler.jsonc` | Cloudflare config: `assets.directory = "landing"`, nothing else. No Worker script. |
+| `public/index.html` | Landing: downloads, how it works, input format, outputs, CLI flags |
+| `public/logs.html` + `public/logs.js` | Log Viewer: drop `.log` / `report.csv`, parsed in the browser |
+| `public/style.css` | **The entire web design system** — tokens in `:root`, every component class |
+| `public/theme.js` | Theme init + toggle, OS detection for the primary download button, latest-release badge |
+| `public/favicon.svg` | Brand mark |
+| `wrangler.toml` | `main = "src/index.js"`, assets `public/` with `run_worker_first`, custom domain route. Deployed by Workers Builds on push. |
 | `.github/workflows/release.yml` | Tag `vX.Y.Z` → binaries on GitHub Releases. **The landing's download URLs must match the asset names this workflow produces.** |
 
 ### The three surfaces
 
 | Surface | Where | Page doc |
 |---------|-------|----------|
-| **Landing** | `landing/index.html` | `pages/landing.md` |
-| **Log Viewer** | `landing/logs.html` | `pages/logs.md` |
+| **Landing** | `public/index.html` | `pages/landing.md` |
+| **Log Viewer** | `public/logs.html` | `pages/logs.md` |
 | **Desktop** (Fyne window) | `internal/gui/gui.go` | `pages/desktop.md` |
 
 ### Who uses it and how
@@ -64,7 +66,7 @@ Consequences that outrank everything else:
    template syntax and the Excel column order as literal text, in mono, so
    people can copy the shape. Never paraphrase a format.
 3. **Nothing is uploaded.** The Log Viewer parses locally; the landing says
-   so. The download page must never look like a SaaS sign-up.
+   so. The Worker only checks the session — it never sees a log.
 4. **Some workstations may only touch the devices through SecureCRT.**
    The planned *Export SecureCRT script* button (see `pages/desktop.md`)
    exists for those; the web copy should not promise it until it ships.
@@ -159,7 +161,7 @@ read once; the Log Viewer is denser (see its page file: 36px rows).
 
 ---
 
-## 2. Color tokens — SOURCE OF TRUTH = `landing/style.css` `:root`
+## 2. Color tokens — SOURCE OF TRUTH = `public/style.css` `:root`
 
 Do not introduce a second accent hue, a gradient, or a raw hex in HTML or
 JS. Add a token here first. Every token exists in **both** themes.
@@ -375,5 +377,6 @@ Decorative icons next to text carry `aria-hidden="true"`.
 - Nudging the blue towards the hub's indigo or OceanStor's sky.
 - Rewriting the log parser's structure without changing
   `sshrunner.go` in the same commit (they are one format).
-- Adding a Worker or SSO gate: the landing is deliberately public and
-  static (the binary runs where the hub cannot reach).
+- Adding API routes to the Worker "because it is there": the web is a
+  download page + a local Log Viewer. Nothing about a run ever reaches
+  Cloudflare.
