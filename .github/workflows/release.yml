@@ -27,9 +27,10 @@ jobs:
 
       # Run every test before spending minutes on the cross-compilation. The
       # gui package tests use Fyne's software test driver (no display), but
-      # compiling it still needs the GL/X11 headers.
+      # compiling it still needs the GL/X11 headers — and, since Fyne 2.8 (GLFW
+      # 3.4 builds the X11 and Wayland backends together), the Wayland ones.
       - name: Install GL headers for the gui tests
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq libgl1-mesa-dev xorg-dev
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev wayland-protocols
 
       - name: Test
         run: go test ./...

@@ -122,7 +122,7 @@ añade `C:\msys64\mingw64\bin` al PATH.
 (`xcode-select --install`).
 
 **Linux:** instala las librerías de desarrollo de tu distro, por ejemplo en
-Debian/Ubuntu: `sudo apt install gcc libgl1-mesa-dev xorg-dev`.
+Debian/Ubuntu: `sudo apt install gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev wayland-protocols`.
 
 Con eso listo:
 
