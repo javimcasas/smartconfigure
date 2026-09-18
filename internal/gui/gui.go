@@ -88,7 +88,50 @@ func Launch(version string) {
 
 	ui := newWindowUI(w, version)
 	w.SetContent(ui.root)
+	keepLogicalSizeAcrossMonitors(w)
 	w.ShowAndRun()
+}
+
+// keepLogicalSizeAcrossMonitors works around a Fyne bug (2.6–2.8.1) on
+// Windows setups whose monitors have different DPI: when the window
+// crosses to a monitor with another scale, Fyne re-scales the content but
+// does not reliably re-size the native window, so every 150% → 100% → 150%
+// round trip shrinks it by the DPI ratio (and pointer mapping goes with
+// it). The logical size is the invariant, so remember it while the scale
+// is stable and re-apply it through Resize the moment the scale changes.
+func keepLogicalSizeAcrossMonitors(w fyne.Window) {
+	done := make(chan struct{})
+	w.SetOnClosed(func() { close(done) })
+
+	go func() {
+		ticker := time.NewTicker(250 * time.Millisecond)
+		defer ticker.Stop()
+		var lastScale float32
+		var lastSize fyne.Size
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+			}
+			fyne.DoAndWait(func() {
+				c := w.Canvas()
+				scale, size := c.Scale(), c.Size()
+				switch {
+				case lastScale == 0:
+					lastScale, lastSize = scale, size
+				case scale != lastScale:
+					lastScale = scale
+					w.Resize(lastSize)
+				case absDiff(size.Width, lastSize.Width) > 1 || absDiff(size.Height, lastSize.Height) > 1:
+					// A real resize by the user; sub-unit wobble is just
+					// pixel rounding at the current scale and must not
+					// accumulate across hops.
+					lastSize = size
+				}
+			})
+		}
+	}()
 }
 
 // windowUI holds every widget the handlers need. State lives here, not in
@@ -563,6 +606,13 @@ func (ui *windowUI) showProgress(show bool) {
 // setStatus is safe to call from any goroutine.
 func (ui *windowUI) setStatus(text string) {
 	fyne.Do(func() { ui.setNote(ui.statusLabel, text) })
+}
+
+func absDiff(a, b float32) float32 {
+	if a > b {
+		return a - b
+	}
+	return b - a
 }
 
 func firstNonEmpty(values ...string) string {

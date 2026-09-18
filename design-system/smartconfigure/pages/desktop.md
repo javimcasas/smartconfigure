@@ -221,5 +221,15 @@ crt.Session.Disconnect
   38-unit stroke) is drawn for that size. Regenerate both PNGs together.
 - **The output folder is next to the Excel** (`<excel dir>/smartconfigure-output`).
   Every export goes there too.
+- **Logical size survives monitor hops.** Fyne (2.6–2.8.1) on Windows
+  with mixed-DPI monitors re-scales the content when the window crosses to
+  another monitor but does not reliably re-size the native window, so each
+  150% → 100% → 150% round trip shrank it by the DPI ratio and pointer
+  mapping went with it. `keepLogicalSizeAcrossMonitors` polls
+  `Canvas().Scale()` every 250 ms and re-applies the last stable logical
+  size through `Resize` when the scale flips (sub-2-unit wobble ignored so
+  rounding never accumulates). Verified with scripted hops between a 150%
+  and a 100% monitor: 880×727 stays pixel-exact. Keep it until upstream
+  fixes it, then delete.
 - **Window title carries the version** (`SmartConfigure v0.1.0`), so
   screenshots in bug reports identify the build.
