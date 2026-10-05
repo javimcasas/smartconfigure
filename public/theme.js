@@ -26,14 +26,9 @@
 
   applyTheme(storedTheme() || systemTheme());
 
-  function initThemeToggle() {
-    var btn = document.getElementById('themeToggle');
-    if (!btn) return;
-    btn.addEventListener('click', function () {
-      var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      applyTheme(next);
-      try { localStorage.setItem(THEME_KEY, next); } catch (err) { /* private mode: theme just won't persist */ }
-    });
+  // The theme is chosen in the SmartMatrix profile; the inline script at the
+  // top of each page seeds THEME_KEY from the shared smx_theme cookie.
+  function followSystemTheme() {
     if (window.matchMedia) {
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
         if (!storedTheme()) applyTheme(systemTheme());
@@ -99,7 +94,7 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    initThemeToggle();
+    followSystemTheme();
     initDownloadCta();
     initRelease();
   });
