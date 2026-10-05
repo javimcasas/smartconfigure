@@ -13,6 +13,12 @@
 
 // SmartMatrix hub — where to send anyone whose session is missing or expired.
 const HUB_URL = "https://hubsmartmatrix.com/";
+// Where a page request without a session goes: the hub's launch route for
+// this app, so signing in lands back here (a `#/route` rides along every
+// redirect and the hub puts it back on the `?sso=` URL). Bad handoff tokens
+// still bounce to the hub root: never loop through launch with a token the
+// hub just issued.
+const LAUNCH_URL = `${HUB_URL}launch/smartconfigure`;
 const APP_ID = "smartconfigure";
 const COOKIE = "sc_session";
 const SESSION_TTL_MS = 86400 * 1000;
@@ -124,7 +130,7 @@ export default {
 
     // 3. Static assets, only behind a valid session
     const user = await getSessionUser(request, secret);
-    if (!user) return Response.redirect(HUB_URL, 302);
+    if (!user) return Response.redirect(LAUNCH_URL, 302);
     if (!hasAccess(user)) {
       return new Response("Not authorized. Enter through SmartMatrix.", { status: 403 });
     }
